@@ -9,6 +9,8 @@ import { loadConfig, configPath } from './config.js';
 import { Supervisor } from './supervisor.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
 import { startUpdater } from './updater.js';
+import { probeEnvironment } from './probe.js';
+import { deployOfficial } from './deploy.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const asset = name => path.join(here, '..', 'assets', name);
@@ -21,6 +23,7 @@ let tray = null;
 let updater = null;
 let updateState = { kind: 'idle' };
 let quitting = false;
+let deploying = false;
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
@@ -49,8 +52,8 @@ function wireDevtoolsToggle(win) {
 /** 创建启动/状态页窗口（含日志流与重启按钮的唯一入口）。 */
 function createSplash() {
   splashWin = new BrowserWindow({
-    width: 620,
-    height: 480,
+    width: 640,
+    height: 560,
     title: 'DSH Desktop',
     icon: asset('icon-256.png'),
     autoHideMenuBar: true,
@@ -169,6 +172,14 @@ function rebuildTray() {
         },
       },
       { type: 'separator' },
+      {
+        label: '部署官方 DSH',
+        click: () => {
+          if (splashWin === null) createSplash();
+          else splashWin.show();
+          void runOfficialDeploy();
+        },
+      },
       { label: '重启后端', click: () => supervisor.restart() },
       {
         label: '查看后端日志',
@@ -256,6 +267,11 @@ if (!app.requestSingleInstanceLock()) {
     supervisor = new Supervisor(config, path.join(app.getPath('userData'), 'logs'));
     ipcMain.handle('restart-backend', () => supervisor.restart());
     ipcMain.handle('get-snapshot', () => supervisor.snapshot());
+    ipcMain.handle('probe-environment', () => probeEnvironment());
+    ipcMain.handle('deploy-official', () => runOfficialDeploy());
+    ipcMain.handle('open-nodejs', () => {
+      openExternal('https://nodejs.org/');
+    });
     updater = startUpdater({
       onState: next => {
         updateState = next;
@@ -269,6 +285,35 @@ if (!app.requestSingleInstanceLock()) {
     wireSupervisor();
     buildTray();
     createSplash();
-    supervisor.start();
+    const probe = probeEnvironment();
+    if (probe.harness.kind === 'missing') {
+      supervisor.log('未检测到官方 DeepSeek Harness。可在启动页点击「部署官方 DSH」。');
+    } else {
+      supervisor.start();
+    }
   });
+}
+
+/** 从 npm 安装官方 @deepseek-ai/dsh 到本应用目录，成功后按新配置拉起后端。 */
+async function runOfficialDeploy() {
+  if (deploying) return { ok: false, error: '正在部署，请稍候。' };
+  deploying = true;
+  if (splashWin === null) createSplash();
+  else splashWin.show();
+  try {
+    const result = await deployOfficial({
+      onLog: line => {
+        if (supervisor !== null) supervisor.log(line);
+      },
+    });
+    if (result.ok) {
+      supervisor.config = result.config;
+      supervisor.attempts = 0;
+      if (supervisor.child !== null) supervisor.restart();
+      else supervisor.start();
+    }
+    return result;
+  } finally {
+    deploying = false;
+  }
 }

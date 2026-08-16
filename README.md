@@ -7,41 +7,41 @@
 | | 链接 |
 |---|---|
 | 下载安装包 | [Releases](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest) |
-| 当前版本 | 0.1.2（Windows x64） |
+| 当前版本 | 0.1.3（Windows x64） |
 
 ---
 
 ## 安装（普通用户只看这一节）
 
-### 1. 本机先能跑官方 Harness
-
-这个壳**不会**替你安装 DeepSeek Harness。任选一种即可：
-
-- 已经克隆了 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)，并且能在仓库目录执行 `pnpm dsh web`；或
-- 已经全局安装了官方 CLI，终端里输入 `dsh` 能认出命令。
-
-还要有可用的 `DEEPSEEK_API_KEY`（源码仓库根目录的 `.env`，或你平时跑 `dsh` 用的那套环境）。
-
-### 2. 下载并安装壳
+### 1. 下载并安装壳
 
 1. 打开 [最新 Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)。
-2. 下载 **`DSH-Desktop-Setup-0.1.2.exe`**（大约 95 MB）。不要下 Source code 压缩包。
+2. 下载 **`DSH-Desktop-Setup-0.1.3.exe`**（大约 95 MB）。不要下 Source code 压缩包。
 3. 双击安装。安装包未签名，Windows SmartScreen 可能拦截：点 **「更多信息」→「仍要运行」**。
 4. 装完从开始菜单或桌面打开 **DSH Desktop**。
 
 请用这个 Setup 安装，不要用仓库里的 `dist/win-unpacked` 免安装目录——**自动更新只对安装版生效**。
 
-### 3. 第一次打开
+### 2. 第一次打开：还没有官方 Harness 也能继续
 
-启动页会拉起本机的 `dsh web`，看到官方界面即成功。关掉窗口只是进托盘，后端还在；要彻底退出，用托盘里的「退出（结束后端）」。
+壳**不内嵌**官方源码，但可以从官方 npm 包帮你装：
 
-如果停在启动页并报错：
+1. 本机需要 **Node.js 22.19+ 或 24+**（[nodejs.org](https://nodejs.org/)）。没有的话，启动页会提示，点「安装 Node.js」去官网下载，装完再打开壳。
+2. 若本机还没有 DeepSeek Harness，启动页会显示 **「部署官方 DSH」**。点它，壳会把官方包 `@deepseek-ai/dsh` 装到 `%APPDATA%\DSH Desktop\official-runtime`（需要网络，大约一两分钟）。
+3. 装完后自动启动官方原版界面。API Key 在官方界面的 **设置 → 模型** 里填写，不用写进壳。
+
+已经自己克隆过官方仓库、或 PATH 上已有 `dsh` 的人，不会看到这一步，壳直接复用你现有的。
+
+也可以稍后从托盘再点「部署官方 DSH」（用来补装或重装官方包）。
+
+### 3. 启动失败时
 
 | 日志里常见字样 | 怎么办 |
 |---|---|
-| `'dsh' 不是内部或外部命令` / `ENOENT` | 本机没有全局 `dsh`。用托盘「编辑配置」，按下面「配置」改成你的源码仓库路径，保存后托盘「重启后端」。 |
-| 一直不出现 `dsh web: http://127.0.0.1:…` | 仓库没装依赖或没配 API Key。先在终端里把 `pnpm dsh web` 跑通，再回壳里重启后端。 |
-| 端口被占用 | 壳默认让系统分配端口（`--port 0`），一般不会撞。若你在配置里写死了端口，改掉或换一个。 |
+| 未检测到官方 DeepSeek Harness | 点启动页「部署官方 DSH」。 |
+| 需要先安装 Node.js | 点「安装 Node.js」，装 22.19+ 或 24+ 后重开壳。 |
+| npm 退出码非 0 | 检查网络 / npm 源，再点一次部署。 |
+| 一直不出现 `dsh web: http://127.0.0.1:…` | 官方包已装但启动失败。看日志；或托盘「编辑配置」改成你的源码仓库路径。 |
 
 配置文件在 `%APPDATA%\DSH Desktop\config.json`，改完必须重启壳或点「重启后端」。
 

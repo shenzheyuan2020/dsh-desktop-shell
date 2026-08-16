@@ -31,13 +31,22 @@
     background: #020617; border: 1px solid #1e293b; border-radius: 8px;
     font: 12px/1.5 Consolas, "Courier New", monospace; color: #94a3b8; white-space: pre-wrap; word-break: break-all;
   }
-  footer { display: flex; gap: 10px; align-items: center; padding: 12px 20px 16px; }
+  footer { display: flex; gap: 10px; align-items: center; padding: 12px 20px 16px; flex-wrap: wrap; }
   button {
     background: #134e4a; color: #5eead4; border: 1px solid #2dd4bf55;
     padding: 7px 18px; border-radius: 7px; font-size: 13px; cursor: pointer;
   }
   button:hover { background: #115e59; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.secondary { background: #1e293b; color: #94a3b8; border-color: #334155; }
   .hint { font-size: 12px; color: #475569; }
+  #setup {
+    display: none; margin: 0 20px 10px; padding: 12px 14px;
+    border: 1px solid #334155; border-radius: 8px; background: #111827; font-size: 13px; line-height: 1.55;
+  }
+  #setup.visible { display: block; }
+  #setup strong { color: #f8fafc; }
+  #setup p { margin: 0 0 8px; color: #cbd5e1; }
 </style>
 </head>
 <body>
@@ -48,11 +57,17 @@
     <div class="sub">DeepSeek Harness 桌面壳 · 壳核分离</div>
   </div>
 </header>
-<div class="status"><span class="dot starting" id="dot"></span><span id="statusText">正在启动后端…</span></div>
+<div class="status"><span class="dot starting" id="dot"></span><span id="statusText">正在检测本机环境…</span></div>
+<div id="setup">
+  <p><strong>还没有官方 DeepSeek Harness</strong> — 本壳不内嵌官方源码。只要本机有合格的 Node.js，就可以从 npm 安装官方包 <code>@deepseek-ai/dsh</code>，装到本应用目录，然后打开官方原版界面。</p>
+  <p id="setupDetail"></p>
+</div>
 <pre id="log"></pre>
 <footer>
+  <button id="deploy">部署官方 DSH</button>
+  <button id="nodejs" class="secondary">安装 Node.js</button>
   <button id="restart">重启后端</button>
-  <span class="hint">就绪后自动进入官方界面 · 启动失败请改配置里的仓库路径 · F12 开发者工具</span>
+  <span class="hint">部署需要网络 · API Key 在官方界面里填写 · F12 开发者工具</span>
 </footer>
 <script>
   const logEl = document.getElementById('log');
@@ -76,13 +91,58 @@
     else if (status.state === 'stopped') { dotEl.classList.add('bad'); statusEl.textContent = '后端已停止。'; }
   }
 
+  const setupEl = document.getElementById('setup');
+  const setupDetail = document.getElementById('setupDetail');
+  const deployBtn = document.getElementById('deploy');
+  const nodeBtn = document.getElementById('nodejs');
+
+  function renderProbe(probe) {
+    const missing = probe.harness.kind === 'missing';
+    setupEl.classList.toggle('visible', missing || !probe.node.ok);
+    if (!probe.node.ok) {
+      setupDetail.textContent = probe.node.reason;
+      deployBtn.disabled = true;
+      statusEl.textContent = '需要先安装合格的 Node.js，才能部署官方 DSH。';
+      dotEl.className = 'dot bad';
+      return;
+    }
+    deployBtn.disabled = false;
+    if (missing) {
+      setupDetail.textContent = '检测到 Node ' + probe.node.version + '。点「部署官方 DSH」将从 npm 安装官方包（需要网络，大约一两分钟）。';
+      statusEl.textContent = '未检测到官方 Harness，可以一键部署。';
+      dotEl.className = 'dot';
+    } else {
+      setupDetail.textContent = '已找到：' + probe.harness.kind + ' · ' + probe.harness.detail;
+    }
+  }
+
   window.dshShell.getSnapshot().then(snapshot => {
     snapshot.lines.forEach(append);
     renderStatus(snapshot);
   });
+  window.dshShell.probe().then(renderProbe);
   window.dshShell.onLog(append);
-  window.dshShell.onStatus(renderStatus);
+  window.dshShell.onStatus(status => {
+    renderStatus(status);
+    if (status.state === 'failed') window.dshShell.probe().then(renderProbe);
+  });
   document.getElementById('restart').addEventListener('click', () => { window.dshShell.restart(); });
+  nodeBtn.addEventListener('click', () => { window.dshShell.openNodejs(); });
+  deployBtn.addEventListener('click', async () => {
+    deployBtn.disabled = true;
+    statusEl.textContent = '正在从 npm 安装官方 @deepseek-ai/dsh…';
+    dotEl.className = 'dot starting';
+    const result = await window.dshShell.deployOfficial();
+    if (result.ok) {
+      setupEl.classList.remove('visible');
+      statusEl.textContent = '官方包已部署，正在启动…';
+    } else {
+      deployBtn.disabled = false;
+      statusEl.textContent = '部署失败：' + result.error;
+      dotEl.className = 'dot bad';
+      append(result.error);
+    }
+  });
 </script>
 </body>
 </html>

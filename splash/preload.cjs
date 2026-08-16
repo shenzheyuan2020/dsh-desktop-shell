@@ -1,4 +1,4 @@
-// 启动页预加载：只暴露日志流、状态流、快照与重启四个能力，不暴露任何 Node 接口。
+// 启动页预加载：日志、状态、探测、部署官方包。不暴露 Node。
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('dshShell', {
@@ -6,4 +6,7 @@ contextBridge.exposeInMainWorld('dshShell', {
   onStatus: callback => ipcRenderer.on('backend-status', (_event, status) => callback(status)),
   restart: () => ipcRenderer.invoke('restart-backend'),
   getSnapshot: () => ipcRenderer.invoke('get-snapshot'),
+  probe: () => ipcRenderer.invoke('probe-environment'),
+  deployOfficial: () => ipcRenderer.invoke('deploy-official'),
+  openNodejs: () => ipcRenderer.invoke('open-nodejs'),
 });
