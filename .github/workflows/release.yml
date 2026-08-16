@@ -37,7 +37,15 @@ jobs:
           make_latest: true
           name: DSH Desktop ${{ github.ref_name }}
           body: |
-            壳核分离桌面外壳。安装后双击即可加载本机官方 `dsh web` 原生界面；本包只更新壳，不内嵌、不 fork DeepSeek Harness。
+            Desktop shell around official `dsh web`. This package updates the shell only; it does not fork or embed DeepSeek Harness.
+
+            壳核分离桌面外壳。本包只更新壳，不内嵌、不 fork DeepSeek Harness。
+
+            First run may ask to install Node.js 22.19+ or 24 (not Node 20) and official `@deepseek-ai/dsh`. Closing the window hides to the tray — quit from the cyan `>_` icon.
+
+            首次可能需要安装 Node.js 22.19+ 或 24（不要装 20）以及官方包。关窗进托盘；退出请右键青色 `>_` 图标。
+
+            The installer is unsigned. If SmartScreen appears: More info → Run anyway.
             安装包未签名，SmartScreen 提示时点「更多信息 → 仍要运行」。
           files: |
             dist/DSH-Desktop-Setup-*.exe

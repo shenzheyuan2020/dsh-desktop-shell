@@ -4,9 +4,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { t } from './i18n.js';
 
-const SOURCE_ARGS = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web'];
-// 维护者本机的源码仓库；其他机器命中不了该路径，会走 DSH_CHECKOUT、本应用已部署的官方包，或 PATH 上的 dsh。
-export const KNOWN_CHECKOUTS = ['E:\\30_软件游戏\\Opt\\DSH'];
+/** 源码仓库启动参数（cwd 必须是仓库根）。 */
+export const SOURCE_LAUNCH_ARGS = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web'];
+
+const NODE_DOWNLOAD = 'https://nodejs.org/en/download';
+const NPM_MIRROR = 'https://registry.npmmirror.com';
+
+/** 官方 Node 下载页（页面上请选 22.19+ 或 24，不要选 20 LTS）。 */
+export function nodeDownloadUrl() {
+  return NODE_DOWNLOAD;
+}
+
+/** 国内 npm 镜像，默认源失败时回退。 */
+export function npmMirrorUrl() {
+  return NPM_MIRROR;
+}
 
 /** @param {string | undefined} dir 是否为可源码启动的 DSH 仓库。 */
 export function isCheckout(dir) {
@@ -24,23 +36,37 @@ export function officialRuntimeBin() {
   return path.join(officialRuntimeDir(), 'node_modules', '.bin', name);
 }
 
-/** @returns {{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}} 指向本应用已部署官方包的启动配置。 */
+/** @returns {Record<string, unknown>} 指向本应用已部署官方包的启动配置。 */
 export function officialRuntimeLaunch() {
   return { command: officialRuntimeBin(), args: ['web'], cwd: '', env: {}, shell: true };
 }
 
 /**
- * 按本机环境挑选默认启动方式：源码仓库 → 本应用已部署的官方包 → PATH 上的 dsh。
- * @returns {{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}} 默认配置。
+ * 首次写入配置时的界面语言：跟系统显示语言，可再在壳里改。
+ * @returns {'en' | 'zh'}
+ */
+export function detectDefaultLocale() {
+  try {
+    const loc = String(app.getLocale?.() || Intl.DateTimeFormat().resolvedOptions().locale || 'en');
+    return loc.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+/**
+ * 按本机环境挑选默认启动方式：`DSH_CHECKOUT` → 本应用已部署的官方包 → PATH 上的 `dsh`。
+ * 不扫描维护者本机路径。
+ * @returns {Record<string, unknown>} 默认配置。
  */
 export function defaultConfig() {
-  for (const dir of [...KNOWN_CHECKOUTS, process.env.DSH_CHECKOUT]) {
-    if (isCheckout(dir)) {
-      return { command: 'node', args: [...SOURCE_ARGS], cwd: dir, env: {}, shell: false, locale: 'en' };
-    }
+  const locale = detectDefaultLocale();
+  const checkout = process.env.DSH_CHECKOUT;
+  if (isCheckout(checkout)) {
+    return { command: 'node', args: [...SOURCE_LAUNCH_ARGS], cwd: checkout, env: {}, shell: false, locale };
   }
-  if (fs.existsSync(officialRuntimeBin())) return { ...officialRuntimeLaunch(), locale: 'en' };
-  return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true, locale: 'en' };
+  if (fs.existsSync(officialRuntimeBin())) return { ...officialRuntimeLaunch(), locale };
+  return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true, locale };
 }
 
 /**
@@ -53,7 +79,7 @@ export function configPath() {
 
 /**
  * 读取配置；文件不存在时落盘默认值，JSON 损坏时弹窗提示并回退默认值（不覆盖用户文件）。
- * @returns {{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}} 生效配置。
+ * @returns {Record<string, unknown>} 生效配置。
  */
 export function loadConfig() {
   const file = configPath();
@@ -74,8 +100,8 @@ export function loadConfig() {
 
 /**
  * 把部分字段写回 config.json，并返回合并后的生效配置。
- * @param {Partial<{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}>} patch 要覆盖的字段。
- * @returns {{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}} 合并后的配置。
+ * @param {Record<string, unknown>} patch 要覆盖的字段。
+ * @returns {Record<string, unknown>} 合并后的配置。
  */
 export function saveConfig(patch) {
   const merged = { ...loadConfig(), ...patch };

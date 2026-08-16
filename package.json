@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-shell",
   "productName": "DSH Desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": false,
   "description": "Desktop shell for official DeepSeek Harness: launches dsh web and loads the official UI in a native window",
   "author": "shenzheyuan2020",

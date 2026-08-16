@@ -2,10 +2,22 @@
  * DSH Desktop 壳主进程：单实例、启动页、主窗口、托盘、外链策略与后端编排。
  * 主窗口以零注入方式承载 dsh web GUI（无 preload、sandbox 开启），只允许 loopback 导航。
  */
-import { app, BrowserWindow, Menu, Tray, shell, ipcMain, clipboard } from 'electron';
+import { app, BrowserWindow, Menu, Tray, shell, ipcMain, clipboard, dialog } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, configPath, saveConfig } from './config.js';
+import {
+  loadConfig,
+  configPath,
+  saveConfig,
+  officialRuntimeBin,
+  officialRuntimeDir,
+  officialRuntimeLaunch,
+  nodeDownloadUrl,
+  isCheckout,
+  SOURCE_LAUNCH_ARGS,
+} from './config.js';
+import { resolveLaunchFromDir } from './harness.js';
 import { Supervisor } from './supervisor.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
 import { startUpdater } from './updater.js';
@@ -43,6 +55,90 @@ function openExternal(url) {
   if (/^https?:/i.test(url)) void shell.openExternal(url);
 }
 
+function currentProbe() {
+  return probeEnvironment(supervisor?.config ?? loadConfig());
+}
+
+/**
+ * 探测结果来自磁盘/环境、但 config 仍是默认的 `dsh` 时，把启动配置改成真正能拉起的那一份。
+ * 用户已经写明 checkout 或绝对路径时不改。
+ */
+function applyDiscoveredLaunch(probe) {
+  if (supervisor === null || probe.harness.kind === 'missing') return;
+  const config = supervisor.config;
+  if (config.cwd && isCheckout(config.cwd)) return;
+  if (config.command && fs.existsSync(config.command)) return;
+  if (probe.harness.kind === 'checkout') {
+    supervisor.config = saveConfig({
+      command: 'node',
+      args: [...SOURCE_LAUNCH_ARGS],
+      cwd: probe.harness.detail,
+      shell: false,
+    });
+    return;
+  }
+  if (probe.harness.kind === 'runtime') {
+    supervisor.config = saveConfig(officialRuntimeLaunch());
+    return;
+  }
+  if (probe.harness.kind === 'path') {
+    supervisor.config = saveConfig({ command: probe.harness.detail, args: ['web'], cwd: '', shell: true });
+  }
+}
+
+function kindLabel(kind) {
+  if (kind === 'checkout') return t('kindCheckout');
+  if (kind === 'runtime') return t('kindRuntime');
+  if (kind === 'path') return t('kindPath');
+  return t('identityMissing');
+}
+
+function identity() {
+  const probe = currentProbe();
+  return {
+    shellVersion: app.getVersion(),
+    locale: getLocale(),
+    node: probe.node,
+    harness: probe.harness,
+    kindLabel: kindLabel(probe.harness.kind),
+  };
+}
+
+function shellTitle() {
+  const probe = currentProbe();
+  const shellVer = app.getVersion();
+  if (probe.harness.kind !== 'missing' && probe.harness.version) {
+    return `DSH Desktop ${shellVer} · Harness ${probe.harness.version}`;
+  }
+  if (probe.harness.kind !== 'missing') {
+    return `DSH Desktop ${shellVer} · Harness`;
+  }
+  return `DSH Desktop ${shellVer}`;
+}
+
+function applyWindowTitle() {
+  const title = shellTitle();
+  if (mainWin !== null && !mainWin.isDestroyed()) mainWin.setTitle(title);
+  if (splashWin !== null && !splashWin.isDestroyed()) splashWin.setTitle(title);
+  if (tray !== null) tray.setToolTip(title);
+}
+
+function pushProbe() {
+  const probe = currentProbe();
+  applyWindowTitle();
+  if (splashWin !== null && !splashWin.isDestroyed()) {
+    splashWin.webContents.send('probe-updated', probe);
+    splashWin.webContents.send('identity-updated', identity());
+  }
+  rebuildTray();
+}
+
+function parentWin() {
+  if (splashWin !== null && !splashWin.isDestroyed() && splashWin.isVisible()) return splashWin;
+  if (mainWin !== null && !mainWin.isDestroyed()) return mainWin;
+  return undefined;
+}
+
 /** @param {import('electron').BrowserWindow} win F12 切换开发者工具。 */
 function wireDevtoolsToggle(win) {
   win.webContents.on('before-input-event', (_event, input) => {
@@ -53,9 +149,9 @@ function wireDevtoolsToggle(win) {
 /** 创建启动/状态页窗口（含日志流与重启按钮的唯一入口）。 */
 function createSplash() {
   splashWin = new BrowserWindow({
-    width: 640,
-    height: 560,
-    title: 'DSH Desktop',
+    width: 720,
+    height: 640,
+    title: shellTitle(),
     icon: asset('icon-256.png'),
     autoHideMenuBar: true,
     backgroundColor: '#0f172a',
@@ -66,11 +162,33 @@ function createSplash() {
       nodeIntegration: false,
     },
   });
+  splashWin.on('close', event => {
+    if (quitting) return;
+    event.preventDefault();
+    maybeHintCloseToTray();
+    splashWin.hide();
+  });
   splashWin.on('closed', () => {
     splashWin = null;
   });
+  splashWin.on('focus', () => {
+    const probe = currentProbe();
+    pushProbe();
+    if (probe.harness.kind !== 'missing' && supervisor !== null && supervisor.child === null && supervisor.state !== 'starting') {
+      applyDiscoveredLaunch(probe);
+      supervisor.start();
+    }
+  });
   wireDevtoolsToggle(splashWin);
   void splashWin.loadFile(path.join(splashDir, 'index.html'));
+}
+
+function showConsole() {
+  if (splashWin === null) createSplash();
+  else {
+    splashWin.show();
+    splashWin.focus();
+  }
 }
 
 /**
@@ -90,7 +208,7 @@ function ensureMainWindow(url) {
       minWidth: 900,
       minHeight: 600,
       show: false,
-      title: 'DSH Desktop',
+      title: shellTitle(),
       icon: asset('icon-256.png'),
       autoHideMenuBar: true,
       backgroundColor: '#0f172a',
@@ -109,9 +227,14 @@ function ensureMainWindow(url) {
       event.preventDefault();
       openExternal(target);
     });
+    mainWin.on('page-title-updated', event => {
+      event.preventDefault();
+      mainWin.setTitle(shellTitle());
+    });
     mainWin.on('close', event => {
       if (quitting) return;
       event.preventDefault();
+      maybeHintCloseToTray();
       mainWin.hide();
     });
     mainWin.on('closed', () => {
@@ -122,8 +245,21 @@ function ensureMainWindow(url) {
     });
   }
   void mainWin.loadURL(url);
+  applyWindowTitle();
   if (!firstCreate && !mainWin.isVisible()) mainWin.show();
   if (splashWin !== null) splashWin.hide();
+}
+
+function maybeHintCloseToTray() {
+  const config = loadConfig();
+  if (config.closeToTrayHintShown === true) return;
+  saveConfig({ closeToTrayHintShown: true });
+  void dialog.showMessageBox(parentWin() ?? mainWin, {
+    type: 'info',
+    title: t('trayHintTitle'),
+    message: t('trayHintTitle'),
+    detail: t('trayHintBody'),
+  });
 }
 
 /** 显示可用窗口：后端就绪显示主窗口，否则显示启动/状态页。 */
@@ -133,14 +269,10 @@ function showAnyWindow() {
     mainWin.focus();
     return;
   }
-  if (splashWin === null) createSplash();
-  else {
-    splashWin.show();
-    splashWin.focus();
-  }
+  showConsole();
 }
 
-/** @returns {string} 托盘「检查更新」一项的当前文案。 */
+/** @returns {string} 托盘「检查壳更新」一项的当前文案。 */
 function updateMenuLabel() {
   if (updateState.kind === 'checking') return t('trayUpdating');
   if (updateState.kind === 'available' || updateState.kind === 'downloading') {
@@ -152,25 +284,32 @@ function updateMenuLabel() {
 }
 
 function uiBundle() {
-  return { locale: getLocale(), strings: strings() };
+  return { locale: getLocale(), strings: strings(), identity: identity() };
 }
 
 function applyLocale(next) {
   setLocale(next);
   saveConfig({ locale: getLocale() });
   rebuildTray();
+  applyWindowTitle();
   if (splashWin !== null && !splashWin.isDestroyed()) {
     splashWin.webContents.send('locale-changed', uiBundle());
   }
+}
+
+function hasOfficialRuntime() {
+  return fs.existsSync(officialRuntimeBin());
 }
 
 /** 按后端与更新状态重建托盘菜单。 */
 function rebuildTray() {
   if (tray === null) return;
   const url = supervisor?.url ?? null;
+  const officialInstalled = hasOfficialRuntime();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: t('trayShow'), click: showAnyWindow },
+      { label: t('trayConsole'), click: showConsole },
       {
         label: t('trayBrowser'),
         enabled: url !== null,
@@ -187,13 +326,13 @@ function rebuildTray() {
       },
       { type: 'separator' },
       {
-        label: t('trayDeploy'),
+        label: officialInstalled ? t('trayUpdateOfficial') : t('trayDeploy'),
         click: () => {
-          if (splashWin === null) createSplash();
-          else splashWin.show();
-          void runOfficialDeploy();
+          showConsole();
+          void confirmAndDeploy({ update: officialInstalled });
         },
       },
+      { label: t('trayPick'), click: () => void pickHarnessFolder() },
       { label: t('trayRestart'), click: () => supervisor.restart() },
       {
         label: t('trayLogs'),
@@ -246,7 +385,7 @@ function rebuildTray() {
 /** 建托盘：菜单项随后端状态与更新状态刷新。 */
 function buildTray() {
   tray = new Tray(asset('icon-32.png'));
-  tray.setToolTip('DSH Desktop');
+  applyWindowTitle();
   rebuildTray();
   supervisor.on('status', rebuildTray);
   tray.on('double-click', showAnyWindow);
@@ -261,14 +400,100 @@ function wireSupervisor() {
     if (splashWin !== null && !splashWin.isDestroyed()) splashWin.webContents.send('backend-status', status);
     if (status.state === 'failed') {
       console.log('[shell] backend failed');
-      if (splashWin === null) createSplash();
-      else splashWin.show();
+      showConsole();
     }
+    applyWindowTitle();
   });
   supervisor.on('ready', url => {
     console.log(`[shell] backend ready: ${url}`);
     ensureMainWindow(url);
+    pushProbe();
   });
+}
+
+async function explainAndOpenNode() {
+  const { response } = await dialog.showMessageBox(parentWin(), {
+    type: 'info',
+    title: t('nodeNeedTitle'),
+    message: t('nodeNeedTitle'),
+    detail: t('nodeNeedBody'),
+    buttons: [t('nodeOpenDownload'), t('cancel')],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) openExternal(nodeDownloadUrl());
+}
+
+async function pickHarnessFolder() {
+  const result = await dialog.showOpenDialog(parentWin(), {
+    title: t('pickTitle'),
+    properties: ['openDirectory'],
+  });
+  if (result.canceled || !result.filePaths[0]) return { ok: false, cancelled: true };
+  const dir = result.filePaths[0];
+  const launch = resolveLaunchFromDir(dir);
+  if (launch === null) {
+    await dialog.showMessageBox(parentWin(), {
+      type: 'error',
+      title: t('pickTitle'),
+      message: t('pickInvalid'),
+    });
+    return { ok: false, error: t('pickInvalid') };
+  }
+  const config = saveConfig(launch);
+  supervisor.config = config;
+  supervisor.attempts = 0;
+  if (supervisor.child !== null) supervisor.restart();
+  else supervisor.start();
+  pushProbe();
+  return { ok: true, detail: launch.cwd || launch.command };
+}
+
+async function confirmAndDeploy({ update = false } = {}) {
+  if (deploying) return { ok: false, error: t('deployingWait') };
+  const probe = currentProbe();
+  const current = `${supervisor.config.command} ${(supervisor.config.args || []).join(' ')}`.trim();
+  const overwrite =
+    !update &&
+    probe.harness.kind !== 'missing' &&
+    probe.harness.kind !== 'runtime';
+  const { response } = await dialog.showMessageBox(parentWin(), {
+    type: 'question',
+    title: update ? t('updateConfirmTitle') : t('deployConfirmTitle'),
+    message: update ? t('updateConfirmTitle') : t('deployConfirmTitle'),
+    detail: `${update ? t('updateConfirmBody') : t('deployConfirmBody', { dir: officialRuntimeDir() })}${
+      overwrite ? `\n\n${t('deployOverwrite', { current })}` : ''
+    }`,
+    buttons: [update ? t('updateConfirm') : t('deployConfirm'), t('cancel')],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response !== 0) return { ok: false, cancelled: true };
+  return runOfficialDeploy();
+}
+
+/** 从 npm 安装官方 @deepseek-ai/dsh 到本应用目录，成功后按新配置拉起后端。 */
+async function runOfficialDeploy() {
+  if (deploying) return { ok: false, error: t('deployingWait') };
+  deploying = true;
+  showConsole();
+  try {
+    const result = await deployOfficial({
+      onLog: line => {
+        if (supervisor !== null) supervisor.log(line);
+      },
+    });
+    if (result.ok) {
+      supervisor.config = result.config;
+      supervisor.attempts = 0;
+      if (supervisor.child !== null) supervisor.restart();
+      else supervisor.start();
+      pushProbe();
+    }
+    return result;
+  } finally {
+    deploying = false;
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -289,26 +514,28 @@ if (!app.requestSingleInstanceLock()) {
     supervisor = new Supervisor(config, path.join(app.getPath('userData'), 'logs'));
     ipcMain.handle('restart-backend', () => supervisor.restart());
     ipcMain.handle('get-snapshot', () => supervisor.snapshot());
-    ipcMain.handle('probe-environment', () => probeEnvironment());
-    ipcMain.handle('deploy-official', () => runOfficialDeploy());
-    ipcMain.handle('open-nodejs', () => {
-      openExternal('https://nodejs.org/');
-    });
+    ipcMain.handle('probe-environment', () => currentProbe());
+    ipcMain.handle('deploy-official', () => confirmAndDeploy({ update: hasOfficialRuntime() }));
+    ipcMain.handle('pick-harness', () => pickHarnessFolder());
+    ipcMain.handle('open-nodejs', () => explainAndOpenNode());
     ipcMain.handle('open-config', () => {
       void shell.openPath(configPath());
     });
     ipcMain.handle('get-ui', () => uiBundle());
+    ipcMain.handle('get-identity', () => identity());
     ipcMain.handle('set-locale', (_event, next) => {
       applyLocale(next);
       return uiBundle();
     });
     ipcMain.handle('reprobe-and-start', () => {
       supervisor.config = loadConfig();
-      const next = probeEnvironment();
+      const next = currentProbe();
       if (next.harness.kind !== 'missing') {
+        applyDiscoveredLaunch(next);
         if (supervisor.child !== null) supervisor.restart();
         else supervisor.start();
       }
+      pushProbe();
       return next;
     });
     updater = startUpdater({
@@ -324,35 +551,13 @@ if (!app.requestSingleInstanceLock()) {
     wireSupervisor();
     buildTray();
     createSplash();
-    const probe = probeEnvironment();
+    const probe = currentProbe();
     if (probe.harness.kind === 'missing') {
       supervisor.log(t('missingLog'));
     } else {
+      applyDiscoveredLaunch(probe);
       supervisor.start();
     }
+    applyWindowTitle();
   });
-}
-
-/** 从 npm 安装官方 @deepseek-ai/dsh 到本应用目录，成功后按新配置拉起后端。 */
-async function runOfficialDeploy() {
-  if (deploying) return { ok: false, error: t('deployingWait') };
-  deploying = true;
-  if (splashWin === null) createSplash();
-  else splashWin.show();
-  try {
-    const result = await deployOfficial({
-      onLog: line => {
-        if (supervisor !== null) supervisor.log(line);
-      },
-    });
-    if (result.ok) {
-      supervisor.config = result.config;
-      supervisor.attempts = 0;
-      if (supervisor.child !== null) supervisor.restart();
-      else supervisor.start();
-    }
-    return result;
-  } finally {
-    deploying = false;
-  }
 }

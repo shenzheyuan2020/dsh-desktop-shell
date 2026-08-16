@@ -10,7 +10,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { t } from './i18n.js';
+import { getLocale, t } from './i18n.js';
 
 const READY_PREFIX = 'dsh web: ';
 const BACKOFF_MS = [1000, 3000, 10000];
@@ -54,7 +54,8 @@ export class Supervisor extends EventEmitter {
 
   /** @param {string} line 追加一行日志：缓冲、落盘并广播。 */
   log(line) {
-    const stamped = `[${new Date().toLocaleTimeString('zh-CN', { hour12: false })}] ${line}`;
+    const clock = getLocale() === 'zh' ? 'zh-CN' : 'en-GB';
+    const stamped = `[${new Date().toLocaleTimeString(clock, { hour12: false })}] ${line}`;
     this.lines.push(stamped);
     if (this.lines.length > MAX_LOG_LINES) this.lines.splice(0, this.lines.length - MAX_LOG_LINES);
     fs.appendFile(this.logFile, `${stamped}\n`, () => {});

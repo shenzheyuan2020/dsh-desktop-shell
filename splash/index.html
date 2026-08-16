@@ -12,8 +12,8 @@
     background: #0f172a; color: #e2e8f0;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
   }
-  header { display: flex; align-items: center; gap: 12px; padding: 18px 20px 10px; }
-  .grow { flex: 1; }
+  header { display: flex; align-items: center; gap: 12px; padding: 18px 20px 8px; }
+  .grow { flex: 1; min-width: 0; }
   .lang { display: flex; gap: 6px; }
   .lang button { padding: 5px 10px; font-size: 12px; }
   .lang button.active { background: #134e4a; color: #5eead4; border-color: #2dd4bf55; }
@@ -24,12 +24,18 @@
   }
   h1 { font-size: 16px; margin: 0; font-weight: 600; }
   .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+  #identity { padding: 0 20px 8px; font-size: 12px; color: #94a3b8; word-break: break-all; }
   .status { display: flex; align-items: center; gap: 8px; padding: 4px 20px 10px; font-size: 13px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; }
   .dot.ready { background: #34d399; }
   .dot.bad { background: #f87171; }
   .dot.starting { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.3; } }
+  #progress { display: none; height: 4px; margin: 0 20px 8px; background: #1e293b; overflow: hidden; border-radius: 2px; }
+  #progress.visible { display: block; }
+  #progress .bar { height: 100%; width: 35%; background: #2dd4bf; animation: slide 1s linear infinite; }
+  @keyframes slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(380%); } }
+  .log-label { padding: 0 20px 4px; font-size: 11px; color: #475569; }
   pre {
     flex: 1; margin: 0 20px; padding: 12px; overflow: auto;
     background: #020617; border: 1px solid #1e293b; border-radius: 8px;
@@ -51,6 +57,12 @@
   #setup.visible { display: block; }
   #setup strong { color: #f8fafc; }
   #setup p { margin: 0 0 8px; color: #cbd5e1; }
+  #setup p:last-child { margin-bottom: 0; }
+  .note { color: #94a3b8 !important; font-size: 12px; }
+  #primaryRow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  details.advanced { margin: 0 20px 10px; color: #94a3b8; }
+  details.advanced summary { cursor: pointer; font-size: 12px; color: #64748b; }
+  .adv-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -58,26 +70,40 @@
   <div class="mark">&gt;_</div>
   <div class="grow">
     <h1>DSH Desktop</h1>
-    <div class="sub" id="subtitle">Desktop shell for official DeepSeek Harness</div>
+    <div class="sub" id="subtitle">Official DeepSeek Harness in a desktop window</div>
   </div>
   <div class="lang">
     <button id="langEn" class="secondary active" type="button">English</button>
     <button id="langZh" class="secondary" type="button">中文</button>
   </div>
 </header>
+<div id="identity"></div>
 <div class="status"><span class="dot starting" id="dot"></span><span id="statusText">Checking this machine…</span></div>
 <div id="setup">
-  <p><strong id="setupTitle">Official DeepSeek Harness was not found</strong> — <span id="setupBody">This shell does not bundle official source. If Node.js is installed, you can install the official npm package @deepseek-ai/dsh into this app folder and then open the official UI.</span></p>
+  <p><strong id="setupTitle">DeepSeek Harness is not on this PC yet</strong></p>
+  <p id="setupBody">This window does not include Harness.</p>
+  <p class="note" id="setupKey"></p>
+  <p class="note" id="setupLang"></p>
   <p id="setupDetail"></p>
+  <div id="primaryRow">
+    <button id="deploy" type="button">Install official Harness</button>
+    <button id="nodejs" class="secondary" type="button">Install Node.js 22.19+ or 24</button>
+  </div>
 </div>
+<details class="advanced" id="advanced">
+  <summary id="advancedLabel">Advanced</summary>
+  <div class="adv-row">
+    <button id="reprobe" class="secondary" type="button">Check again</button>
+    <button id="pickFolder" class="secondary" type="button">Choose Harness folder…</button>
+    <button id="editConfig" class="secondary" type="button">Edit config.json</button>
+    <button id="restart" class="secondary" type="button">Restart backend</button>
+  </div>
+</details>
+<div id="progress"><div class="bar"></div></div>
+<div class="log-label" id="logLabel">Log</div>
 <pre id="log"></pre>
 <footer>
-  <button id="deploy">Install official DSH</button>
-  <button id="reprobe" class="secondary">Check again</button>
-  <button id="nodejs" class="secondary">Install Node.js</button>
-  <button id="editConfig" class="secondary">I already installed it — set the path</button>
-  <button id="restart">Restart backend</button>
-  <span class="hint" id="hint">Install needs network · Enter the API key in the official UI · F12 for DevTools</span>
+  <span class="hint" id="hint">Install needs network · API key is in the official UI · F12 for DevTools</span>
 </footer>
 <script>
   const logEl = document.getElementById('log');
@@ -86,10 +112,14 @@
   const setupEl = document.getElementById('setup');
   const setupDetail = document.getElementById('setupDetail');
   const deployBtn = document.getElementById('deploy');
+  const nodeBtn = document.getElementById('nodejs');
+  const progressEl = document.getElementById('progress');
+  const identityEl = document.getElementById('identity');
   const MAX_DOM_LINES = 500;
   let S = {};
   let lastProbe = null;
   let lastStatus = null;
+  let lastIdentity = null;
 
   function fill(key, vars) {
     let text = S[key] || key;
@@ -97,28 +127,44 @@
     return text;
   }
 
+  function kindText(kind) {
+    if (kind === 'checkout') return fill('kindCheckout');
+    if (kind === 'runtime') return fill('kindRuntime');
+    if (kind === 'path') return fill('kindPath');
+    return fill('identityMissing');
+  }
+
+  function setProgress(on) {
+    progressEl.classList.toggle('visible', on);
+  }
+
   function applyStatic() {
     document.documentElement.lang = document.documentElement.dataset.locale === 'zh' ? 'zh-CN' : 'en';
     document.getElementById('subtitle').textContent = fill('subtitle');
     document.getElementById('setupTitle').textContent = fill('setupTitle');
     document.getElementById('setupBody').textContent = fill('setupBody');
-    deployBtn.textContent = fill('deploy');
+    document.getElementById('setupKey').textContent = fill('setupKey');
+    document.getElementById('setupLang').textContent = fill('setupLang');
+    document.getElementById('advancedLabel').textContent = fill('advanced');
     document.getElementById('reprobe').textContent = fill('reprobe');
-    document.getElementById('nodejs').textContent = fill('installNode');
+    document.getElementById('pickFolder').textContent = fill('pickFolder');
     document.getElementById('editConfig').textContent = fill('editConfig');
     document.getElementById('restart').textContent = fill('restart');
     document.getElementById('hint').textContent = fill('hint');
+    document.getElementById('logLabel').textContent = fill('logLabel');
     const locale = document.documentElement.dataset.locale || 'en';
     document.getElementById('langEn').classList.toggle('active', locale === 'en');
     document.getElementById('langZh').classList.toggle('active', locale === 'zh');
+    if (lastIdentity) renderIdentity(lastIdentity);
+    if (lastStatus) renderStatus(lastStatus);
+    if (lastProbe) renderProbe(lastProbe);
   }
 
   function applyBundle(bundle) {
     S = bundle.strings;
     document.documentElement.dataset.locale = bundle.locale;
+    if (bundle.identity) lastIdentity = bundle.identity;
     applyStatic();
-    if (lastStatus) renderStatus(lastStatus);
-    if (lastProbe) renderProbe(lastProbe);
   }
 
   function append(line) {
@@ -126,6 +172,21 @@
     const lines = logEl.textContent.split('\n');
     if (lines.length > MAX_DOM_LINES) logEl.textContent = lines.slice(-MAX_DOM_LINES).join('\n');
     logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function renderIdentity(id) {
+    lastIdentity = id;
+    const parts = [fill('identityShell', { version: id.shellVersion || '' })];
+    if (!id.harness || id.harness.kind === 'missing') parts.push(fill('identityMissing'));
+    else {
+      parts.push(fill('identityHarness', {
+        version: id.harness.version || '—',
+        kind: kindText(id.harness.kind),
+      }));
+    }
+    if (id.node && id.node.version) parts.push(fill('identityNode', { version: id.node.version }));
+    if (id.harness && id.harness.detail) parts.push(id.harness.detail);
+    identityEl.textContent = parts.join(' · ');
   }
 
   function renderStatus(status) {
@@ -141,8 +202,13 @@
   function renderProbe(probe) {
     lastProbe = probe;
     const missing = probe.harness.kind === 'missing';
-    setupEl.classList.toggle('visible', missing || !probe.node.ok);
-    if (!probe.node.ok) {
+    const nodeOk = probe.node.ok;
+    setupEl.classList.toggle('visible', missing || !nodeOk);
+    nodeBtn.style.display = nodeOk ? 'none' : '';
+    deployBtn.style.display = nodeOk && missing ? '' : 'none';
+    deployBtn.textContent = fill('deploy');
+    nodeBtn.textContent = fill('installNode');
+    if (!nodeOk) {
       setupDetail.textContent = probe.node.reason;
       deployBtn.disabled = true;
       statusEl.textContent = fill('needNode');
@@ -155,7 +221,11 @@
       statusEl.textContent = fill('missingHarness');
       dotEl.className = 'dot';
     } else {
-      setupDetail.textContent = fill('foundHarness', { kind: probe.harness.kind, detail: probe.harness.detail });
+      setupDetail.textContent = fill('foundHarness', {
+        kind: kindText(probe.harness.kind),
+        version: probe.harness.version ? 'v' + probe.harness.version : '',
+        detail: probe.harness.detail,
+      });
     }
   }
 
@@ -164,7 +234,10 @@
   }
 
   window.dshShell.getUi().then(applyBundle);
+  window.dshShell.getIdentity().then(renderIdentity);
   window.dshShell.onLocale(applyBundle);
+  window.dshShell.onIdentity(renderIdentity);
+  window.dshShell.onProbe(renderProbe);
   window.dshShell.getSnapshot().then(snapshot => {
     snapshot.lines.forEach(append);
     renderStatus(snapshot);
@@ -180,6 +253,14 @@
   document.getElementById('editConfig').addEventListener('click', () => { window.dshShell.openConfig(); });
   document.getElementById('langEn').addEventListener('click', () => { setLang('en'); });
   document.getElementById('langZh').addEventListener('click', () => { setLang('zh'); });
+  document.getElementById('pickFolder').addEventListener('click', async () => {
+    const result = await window.dshShell.pickHarness();
+    if (result && result.ok) {
+      setupEl.classList.remove('visible');
+      statusEl.textContent = fill('pickOk', { detail: result.detail });
+      dotEl.className = 'dot starting';
+    }
+  });
   document.getElementById('reprobe').addEventListener('click', async () => {
     statusEl.textContent = fill('reprobing');
     const probe = await window.dshShell.reprobeAndStart();
@@ -192,17 +273,25 @@
   });
   deployBtn.addEventListener('click', async () => {
     deployBtn.disabled = true;
+    setProgress(true);
     statusEl.textContent = fill('deploying');
     dotEl.className = 'dot starting';
     const result = await window.dshShell.deployOfficial();
-    if (result.ok) {
+    setProgress(false);
+    if (result && result.cancelled) {
+      deployBtn.disabled = false;
+      statusEl.textContent = fill('deployCancelled');
+      dotEl.className = 'dot';
+      return;
+    }
+    if (result && result.ok) {
       setupEl.classList.remove('visible');
       statusEl.textContent = fill('deployed');
     } else {
       deployBtn.disabled = false;
-      statusEl.textContent = fill('deployFailed', { error: result.error });
+      statusEl.textContent = fill('deployFailed', { error: (result && result.error) || '' });
       dotEl.className = 'dot bad';
-      append(result.error);
+      if (result && result.error) append(result.error);
     }
   });
 </script>

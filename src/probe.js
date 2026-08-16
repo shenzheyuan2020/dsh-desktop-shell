@@ -1,7 +1,8 @@
 /** 探测本机能否运行官方 DeepSeek Harness：系统 Node/npm，以及源码仓库 / 本应用已部署的官方包 / PATH 上的 dsh。 */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { isCheckout, officialRuntimeBin, KNOWN_CHECKOUTS } from './config.js';
+import { isCheckout, officialRuntimeBin } from './config.js';
+import { harnessVersion } from './harness.js';
 import { t } from './i18n.js';
 
 /**
@@ -38,9 +39,18 @@ export function nodeSatisfies(version) {
 }
 
 /**
- * @returns {{node: {ok: boolean, version: string, path: string, npm: string, reason: string}, harness: {kind: 'checkout' | 'runtime' | 'path' | 'missing', detail: string}}} 探测结果。
+ * @param {'checkout' | 'runtime' | 'path' | 'missing'} kind
+ * @param {string} detail
  */
-export function probeEnvironment() {
+function harnessInfo(kind, detail) {
+  return { kind, detail, version: harnessVersion(kind, detail) };
+}
+
+/**
+ * @param {null | {command?: string, cwd?: string}} [config] 当前启动配置；优先于环境扫描，避免和实际拉起的后端不一致。
+ * @returns {{node: {ok: boolean, version: string, path: string, npm: string, reason: string}, harness: {kind: 'checkout' | 'runtime' | 'path' | 'missing', detail: string, version: string}}} 探测结果。
+ */
+export function probeEnvironment(config = null) {
   const nodePath = which('node');
   const npmPath = which('npm');
   let version = '';
@@ -63,18 +73,26 @@ export function probeEnvironment() {
 
   const node = { ok: Boolean(nodePath && npmPath && nodeSatisfies(version)), version, path: nodePath, npm: npmPath, reason };
 
-  for (const dir of [...KNOWN_CHECKOUTS, process.env.DSH_CHECKOUT]) {
-    if (isCheckout(dir)) {
-      return { node, harness: { kind: 'checkout', detail: dir } };
-    }
+  if (config?.cwd && isCheckout(config.cwd)) {
+    return { node, harness: harnessInfo('checkout', config.cwd) };
+  }
+  const configured = String(config?.command || '');
+  if (configured && fs.existsSync(configured)) {
+    const kind = configured.replaceAll('\\', '/').includes('official-runtime') ? 'runtime' : 'path';
+    return { node, harness: harnessInfo(kind, configured) };
+  }
+
+  const checkout = process.env.DSH_CHECKOUT;
+  if (isCheckout(checkout)) {
+    return { node, harness: harnessInfo('checkout', checkout) };
   }
   const runtime = officialRuntimeBin();
   if (fs.existsSync(runtime)) {
-    return { node, harness: { kind: 'runtime', detail: runtime } };
+    return { node, harness: harnessInfo('runtime', runtime) };
   }
   const onPath = which('dsh');
   if (onPath) {
-    return { node, harness: { kind: 'path', detail: onPath } };
+    return { node, harness: harnessInfo('path', onPath) };
   }
-  return { node, harness: { kind: 'missing', detail: '' } };
+  return { node, harness: harnessInfo('missing', '') };
 }
