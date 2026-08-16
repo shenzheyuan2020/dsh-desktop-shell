@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('dshShell', {
   getSnapshot: () => ipcRenderer.invoke('get-snapshot'),
   probe: () => ipcRenderer.invoke('probe-environment'),
   deployOfficial: () => ipcRenderer.invoke('deploy-official'),
+  installRuntimeAndHarness: () => ipcRenderer.invoke('install-runtime-and-harness'),
+  installBundledNode: () => ipcRenderer.invoke('install-bundled-node'),
   pickHarness: () => ipcRenderer.invoke('pick-harness'),
   openNodejs: () => ipcRenderer.invoke('open-nodejs'),
   openConfig: () => ipcRenderer.invoke('open-config'),

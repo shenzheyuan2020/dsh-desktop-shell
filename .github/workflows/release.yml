@@ -41,9 +41,9 @@ jobs:
 
             壳核分离桌面外壳。本包只更新壳，不内嵌、不 fork DeepSeek Harness。
 
-            First run may ask to install Node.js 22.19+ or 24 (not Node 20) and official `@deepseek-ai/dsh`. Closing the window hides to the tray — quit from the cyan `>_` icon.
+            First run can install an app-local official Node (not on PATH) plus `@deepseek-ai/dsh`, or use a system Node 22.19+/24. Closing the window hides to the tray — quit from the cyan `>_` icon.
 
-            首次可能需要安装 Node.js 22.19+ 或 24（不要装 20）以及官方包。关窗进托盘；退出请右键青色 `>_` 图标。
+            首次可安装本应用官方 Node（不写入 PATH）和 `@deepseek-ai/dsh`，或使用系统 Node 22.19+/24。关窗进托盘；退出请右键青色 `>_` 图标。
 
             The installer is unsigned. If SmartScreen appears: More info → Run anyway.
             安装包未签名，SmartScreen 提示时点「更多信息 → 仍要运行」。

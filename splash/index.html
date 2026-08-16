@@ -86,14 +86,15 @@
   <p class="note" id="setupLang"></p>
   <p id="setupDetail"></p>
   <div id="primaryRow">
-    <button id="deploy" type="button">Install official Harness</button>
-    <button id="nodejs" class="secondary" type="button">Install Node.js 22.19+ or 24</button>
+    <button id="primary" type="button">Install runtime and official Harness</button>
   </div>
 </div>
 <details class="advanced" id="advanced">
   <summary id="advancedLabel">Advanced</summary>
   <div class="adv-row">
     <button id="reprobe" class="secondary" type="button">Check again</button>
+    <button id="bundledNode" class="secondary" type="button">Install app-local Node only</button>
+    <button id="nodejs" class="secondary" type="button">Install system Node.js from nodejs.org</button>
     <button id="pickFolder" class="secondary" type="button">Choose Harness folder…</button>
     <button id="editConfig" class="secondary" type="button">Edit config.json</button>
     <button id="restart" class="secondary" type="button">Restart backend</button>
@@ -111,8 +112,9 @@
   const statusEl = document.getElementById('statusText');
   const setupEl = document.getElementById('setup');
   const setupDetail = document.getElementById('setupDetail');
-  const deployBtn = document.getElementById('deploy');
-  const nodeBtn = document.getElementById('nodejs');
+  const primaryBtn = document.getElementById('primary');
+  const bundledBtn = document.getElementById('bundledNode');
+  let primaryAction = 'runtime';
   const progressEl = document.getElementById('progress');
   const identityEl = document.getElementById('identity');
   const MAX_DOM_LINES = 500;
@@ -147,6 +149,8 @@
     document.getElementById('setupLang').textContent = fill('setupLang');
     document.getElementById('advancedLabel').textContent = fill('advanced');
     document.getElementById('reprobe').textContent = fill('reprobe');
+    document.getElementById('bundledNode').textContent = fill('installBundledNode');
+    document.getElementById('nodejs').textContent = fill('installNode');
     document.getElementById('pickFolder').textContent = fill('pickFolder');
     document.getElementById('editConfig').textContent = fill('editConfig');
     document.getElementById('restart').textContent = fill('restart');
@@ -184,7 +188,10 @@
         kind: kindText(id.harness.kind),
       }));
     }
-    if (id.node && id.node.version) parts.push(fill('identityNode', { version: id.node.version }));
+    if (id.node && id.node.version) {
+      const source = id.node.source === 'bundled' ? fill('nodeSourceBundled') : fill('nodeSourceSystem');
+      parts.push(fill('identityNode', { version: id.node.version, source }));
+    }
     if (id.harness && id.harness.detail) parts.push(id.harness.detail);
     identityEl.textContent = parts.join(' · ');
   }
@@ -203,24 +210,29 @@
     lastProbe = probe;
     const missing = probe.harness.kind === 'missing';
     const nodeOk = probe.node.ok;
+    const nodeSource = probe.node.source === 'bundled' ? fill('nodeSourceBundled') : fill('nodeSourceSystem');
     setupEl.classList.toggle('visible', missing || !nodeOk);
-    nodeBtn.style.display = nodeOk ? 'none' : '';
-    deployBtn.style.display = nodeOk && missing ? '' : 'none';
-    deployBtn.textContent = fill('deploy');
-    nodeBtn.textContent = fill('installNode');
+    bundledBtn.style.display = probe.node.source === 'bundled' ? 'none' : '';
     if (!nodeOk) {
+      primaryAction = 'runtime';
+      primaryBtn.style.display = '';
+      primaryBtn.disabled = false;
+      primaryBtn.textContent = fill('installRuntime');
       setupDetail.textContent = probe.node.reason;
-      deployBtn.disabled = true;
       statusEl.textContent = fill('needNode');
       dotEl.className = 'dot bad';
       return;
     }
-    deployBtn.disabled = false;
     if (missing) {
-      setupDetail.textContent = fill('nodeOkDeploy', { version: probe.node.version });
+      primaryAction = 'deploy';
+      primaryBtn.style.display = '';
+      primaryBtn.disabled = false;
+      primaryBtn.textContent = fill('deploy');
+      setupDetail.textContent = fill('nodeOkDeploy', { version: probe.node.version, source: nodeSource });
       statusEl.textContent = fill('missingHarness');
       dotEl.className = 'dot';
     } else {
+      primaryBtn.style.display = 'none';
       setupDetail.textContent = fill('foundHarness', {
         kind: kindText(probe.harness.kind),
         version: probe.harness.version ? 'v' + probe.harness.version : '',
@@ -256,6 +268,10 @@
   document.getElementById('pickFolder').addEventListener('click', async () => {
     const result = await window.dshShell.pickHarness();
     if (result && result.ok) {
+      if (result.needsNode) {
+        statusEl.textContent = fill('needNode');
+        return;
+      }
       setupEl.classList.remove('visible');
       statusEl.textContent = fill('pickOk', { detail: result.detail });
       dotEl.className = 'dot starting';
@@ -271,15 +287,18 @@
       dotEl.className = 'dot starting';
     }
   });
-  deployBtn.addEventListener('click', async () => {
-    deployBtn.disabled = true;
+  async function runPrimary() {
+    primaryBtn.disabled = true;
     setProgress(true);
-    statusEl.textContent = fill('deploying');
+    const installingRuntime = primaryAction === 'runtime';
+    statusEl.textContent = fill(installingRuntime ? 'installingRuntime' : 'deploying');
     dotEl.className = 'dot starting';
-    const result = await window.dshShell.deployOfficial();
+    const result = installingRuntime
+      ? await window.dshShell.installRuntimeAndHarness()
+      : await window.dshShell.deployOfficial();
     setProgress(false);
     if (result && result.cancelled) {
-      deployBtn.disabled = false;
+      primaryBtn.disabled = false;
       statusEl.textContent = fill('deployCancelled');
       dotEl.className = 'dot';
       return;
@@ -288,7 +307,29 @@
       setupEl.classList.remove('visible');
       statusEl.textContent = fill('deployed');
     } else {
-      deployBtn.disabled = false;
+      primaryBtn.disabled = false;
+      statusEl.textContent = fill('deployFailed', { error: (result && result.error) || '' });
+      dotEl.className = 'dot bad';
+      if (result && result.error) append(result.error);
+    }
+  }
+  primaryBtn.addEventListener('click', () => { void runPrimary(); });
+  bundledBtn.addEventListener('click', async () => {
+    bundledBtn.disabled = true;
+    setProgress(true);
+    statusEl.textContent = fill('installingBundled');
+    const result = await window.dshShell.installBundledNode();
+    setProgress(false);
+    bundledBtn.disabled = false;
+    if (result && result.cancelled) {
+      statusEl.textContent = fill('deployCancelled');
+      return;
+    }
+    if (result && result.ok) {
+      statusEl.textContent = fill('bundledInstalled');
+      const probe = await window.dshShell.probe();
+      renderProbe(probe);
+    } else {
       statusEl.textContent = fill('deployFailed', { error: (result && result.error) || '' });
       dotEl.className = 'dot bad';
       if (result && result.error) append(result.error);

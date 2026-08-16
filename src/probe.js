@@ -1,7 +1,9 @@
-/** 探测本机能否运行官方 DeepSeek Harness：系统 Node/npm，以及源码仓库 / 本应用已部署的官方包 / PATH 上的 dsh。 */
+/** 探测本机能否运行官方 DeepSeek Harness：系统或本应用便携 Node/npm，以及源码仓库 / 官方包 / PATH 上的 dsh。 */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { isCheckout, officialRuntimeBin } from './config.js';
+import { findBundledRuntime } from './bundled-node.js';
 import { harnessVersion } from './harness.js';
 import { t } from './i18n.js';
 
@@ -39,6 +41,70 @@ export function nodeSatisfies(version) {
 }
 
 /**
+ * @param {string} nodePath
+ * @returns {string}
+ */
+function readNodeVersion(nodePath) {
+  try {
+    return execFileSync(nodePath, ['--version'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * @param {'system' | 'bundled'} source
+ * @param {string} nodePath
+ * @param {string} npmPath
+ */
+function inspectRuntime(source, nodePath, npmPath) {
+  const version = nodePath ? readNodeVersion(nodePath) : '';
+  let reason = '';
+  if (!nodePath) reason = t('nodeMissing');
+  else if (!npmPath || !fs.existsSync(npmPath)) reason = t('npmMissing');
+  else if (!nodeSatisfies(version)) reason = t('nodeOld', { version: version || t('nodeUnknown') });
+  const ok = Boolean(nodePath && npmPath && fs.existsSync(npmPath) && nodeSatisfies(version));
+  return {
+    ok,
+    version,
+    path: nodePath || '',
+    npm: npmPath || '',
+    home: nodePath ? path.dirname(nodePath) : '',
+    source: ok ? source : 'missing',
+    reason,
+  };
+}
+
+/**
+ * 系统合格 Node 优先，否则用本应用目录里已下载的便携 Node。
+ * @returns {{ok: boolean, version: string, path: string, npm: string, home: string, source: 'system' | 'bundled' | 'missing', reason: string}}
+ */
+export function resolveNodeRuntime() {
+  const system = inspectRuntime('system', which('node'), which('npm'));
+  if (system.ok) return system;
+  const bundled = findBundledRuntime();
+  if (bundled) {
+    const local = inspectRuntime('bundled', bundled.node, bundled.npm);
+    if (local.ok) return local;
+  }
+  return { ...system, source: 'missing', ok: false };
+}
+
+/**
+ * @param {null | {home?: string}} [node]
+ * @returns {Record<string, string>} 给子进程前置 Node 目录的 PATH；系统 Node 也可安全前置。
+ */
+export function launchEnvForNode(node) {
+  if (!node?.home) return {};
+  return { PATH: `${node.home}${path.delimiter}${process.env.PATH || ''}` };
+}
+
+/**
  * @param {'checkout' | 'runtime' | 'path' | 'missing'} kind
  * @param {string} detail
  */
@@ -48,30 +114,10 @@ function harnessInfo(kind, detail) {
 
 /**
  * @param {null | {command?: string, cwd?: string}} [config] 当前启动配置；优先于环境扫描，避免和实际拉起的后端不一致。
- * @returns {{node: {ok: boolean, version: string, path: string, npm: string, reason: string}, harness: {kind: 'checkout' | 'runtime' | 'path' | 'missing', detail: string, version: string}}} 探测结果。
+ * @returns {{node: ReturnType<typeof resolveNodeRuntime>, harness: {kind: 'checkout' | 'runtime' | 'path' | 'missing', detail: string, version: string}}} 探测结果。
  */
 export function probeEnvironment(config = null) {
-  const nodePath = which('node');
-  const npmPath = which('npm');
-  let version = '';
-  if (nodePath) {
-    try {
-      version = execFileSync(nodePath, ['--version'], {
-        encoding: 'utf8',
-        windowsHide: true,
-        timeout: 8000,
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-    } catch {
-      version = '';
-    }
-  }
-  let reason = '';
-  if (!nodePath) reason = t('nodeMissing');
-  else if (!npmPath) reason = t('npmMissing');
-  else if (!nodeSatisfies(version)) reason = t('nodeOld', { version: version || t('nodeUnknown') });
-
-  const node = { ok: Boolean(nodePath && npmPath && nodeSatisfies(version)), version, path: nodePath, npm: npmPath, reason };
+  const node = resolveNodeRuntime();
 
   if (config?.cwd && isCheckout(config.cwd)) {
     return { node, harness: harnessInfo('checkout', config.cwd) };

@@ -1,6 +1,6 @@
 /**
  * 把官方 npm 包 @deepseek-ai/dsh 装进本应用目录（不 fork、不改官方源码）。
- * 能装的前提：系统已有满足官方引擎要求的 Node + npm，且能访问 npm 源。
+ * 能装的前提：系统或本应用便携 Node+npm 合格，且能访问 npm 源。
  * 默认源失败时自动改用 npmmirror。
  */
 import { spawn } from 'node:child_process';
@@ -15,7 +15,7 @@ import {
   saveConfig,
 } from './config.js';
 import { readJsonVersion } from './harness.js';
-import { probeEnvironment, which } from './probe.js';
+import { probeEnvironment } from './probe.js';
 import { t } from './i18n.js';
 import path from 'node:path';
 
@@ -28,8 +28,9 @@ const OFFICIAL_PACKAGE = '@deepseek-ai/dsh';
  * @param {(line: string) => void} log
  * @returns {Promise<number | null>} 退出码。
  */
-function runNpmInstall(npm, dir, registry, log) {
+function runNpmInstall(npm, dir, registry, log, nodeHome) {
   const env = { ...process.env, npm_config_update_notifier: 'false', NO_COLOR: '1' };
+  if (nodeHome) env.PATH = `${nodeHome}${path.delimiter}${process.env.PATH || ''}`;
   if (registry) env.npm_config_registry = registry;
   log(registry ? t('deployRegistry', { registry }) : t('deployRegistryDefault'));
   log(t('deployCmd', { pkg: OFFICIAL_PACKAGE }));
@@ -67,7 +68,7 @@ export async function deployOfficial(options = {}) {
   if (!probe.node.ok) {
     return { ok: false, error: probe.node.reason };
   }
-  const npm = which('npm');
+  const npm = probe.node.npm;
   const dir = officialRuntimeDir();
   fs.mkdirSync(dir, { recursive: true });
   log(t('deployTo', { pkg: OFFICIAL_PACKAGE }));
@@ -84,11 +85,11 @@ export async function deployOfficial(options = {}) {
   let lastCode = null;
   for (const [index, registry] of unique.entries()) {
     if (index > 0) log(t('deployRetryMirror'));
-    lastCode = await runNpmInstall(npm, dir, registry, log);
+    lastCode = await runNpmInstall(npm, dir, registry, log, probe.node.home);
     const bin = officialRuntimeBin();
     if (lastCode === 0 && fs.existsSync(bin)) {
       const version = installedVersion();
-      const config = saveConfig({ ...officialRuntimeLaunch(), harnessVersion: version });
+      const config = saveConfig({ ...officialRuntimeLaunch(probe.node), harnessVersion: version });
       log(t('deployWrote', { bin }));
       if (version) log(t('deployVersion', { version }));
       return { ok: true, config, version };

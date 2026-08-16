@@ -9,10 +9,10 @@
 | | 链接 |
 |---|---|
 | 安装包 | [Releases](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest) |
-| 当前版本 | 0.1.6（Windows x64） |
+| 当前版本 | 0.1.7（Windows x64） |
 | 官方 Harness | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) |
 
-窗口标题和托盘提示会显示 **壳版本** 和 **Harness 版本**（能读到时），例如 `DSH Desktop 0.1.6 · Harness 0.1.0-rc.6`。
+窗口标题和托盘提示会显示 **壳版本** 和 **Harness 版本**（能读到时），例如 `DSH Desktop 0.1.7 · Harness 0.1.0-rc.6`。
 
 ---
 
@@ -32,7 +32,7 @@
 ## 安装壳
 
 1. 打开 [最新 Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)。
-2. 下载 **`DSH-Desktop-Setup-0.1.6.exe`**（大约 95 MB）。不要下 Source code 压缩包，那是源码不是应用。
+2. 下载 **`DSH-Desktop-Setup-0.1.7.exe`**（大约 95 MB）。不要下 Source code 压缩包，那是源码不是应用。
 3. 双击安装。安装包未签名。若出现 Windows SmartScreen，点 **「更多信息」→「仍要运行」**。
 4. 从开始菜单或桌面快捷方式打开 **DSH Desktop**。
 
@@ -55,15 +55,27 @@
 
 **一种都没有**，启动页会停在一段短向导上。你不确认，壳不会擅自安装。
 
-### 方式 A — 安装官方包（不用 git clone）
+### 方式 A — 在壳里安装（不用 git clone）
 
-1. 本机需要 [nodejs.org/en/download](https://nodejs.org/en/download) 的 **Node.js 22.19+ 或 24+**（官方安装包，带 npm）。只用 Electron 自带运行时不够。**不要装 Node 20**——官网最大的 LTS 按钮经常是 20，官方 Harness 会拒绝。
-2. 若 Node 缺失或版本不够，主按钮是 **安装 Node.js 22.19+ 或 24**。先说明版本要求，再打开下载页。你装完回到这里，窗口一获得焦点就会再检测。也可以用 **高级 → 重新检测**。
-3. Node 合格后，主按钮是 **安装官方 Harness**。先确认对话框。壳会对 `@deepseek-ai/dsh` 执行 `npm install`，装到 `%APPDATA%\DSH Desktop\official-runtime`（需要网络，大约一两分钟）。进度条和日志会动。
-4. 默认 npm 源失败时，壳会**自动**用 `https://registry.npmmirror.com` 再试。也可以在 `config.json` 里写 `"npmRegistry"`。
-5. 装完后打开官方界面。API Key 在官方界面的 **设置 → 模型** 里填写，不要写进壳的配置。
+Node 不必自己先装。壳按这个顺序用：
 
-托盘里有同一项。若 `official-runtime` 里已经有官方包，该项变成 **更新官方 Harness**（拉 npm 最新版）。这**不会**更新这个桌面壳。
+1. 本机已有的 **系统** Node.js 22.19+ 或 24+（带 npm）
+2. 已经下到 `%APPDATA%\DSH Desktop\bundled-node` 的 **本应用** 官方 Node（不在系统 PATH 上）
+3. 都没有 —— 主按钮可以下载一份
+
+| 这台电脑 | 主按钮 | 会做什么 |
+|---|---|---|
+| 有合格系统 Node，没有 Harness | **安装官方 Harness** | 只用系统 Node，不再下一份。 |
+| 没有合格 Node | **安装运行时和官方 Harness** | 下载官方 Node.js 24.18.1（Windows x64 zip，校验 SHA-256）到 `bundled-node`，再用它把 `@deepseek-ai/dsh` 装进 `official-runtime`。 |
+| 已经选了仓库或文件夹 | 直接打开官方 UI | 这两步都不出现。 |
+
+Node 压缩包**不在** Setup 安装包里。没有系统 Node 时，第一次需要网络（Node 大约 30 MB，再加上 npm 包）。默认 npm 源失败会改用 `https://registry.npmmirror.com`。Node 压缩包先试 nodejs.org，再试 npmmirror。也可以在 `config.json` 里写 `"npmRegistry"`。
+
+**高级**里仍有：**只安装本应用 Node**、**从 nodejs.org 安装系统 Node.js**（选 22.19+ 或 24，不要选 20）、**选择已有的 Harness 文件夹**、**编辑 config.json**。
+
+装完后打开官方界面。API Key 在官方界面的 **设置 → 模型** 里填写，不要写进壳的配置。
+
+托盘里有同一组动作。若 `official-runtime` 里已经有官方包，该项变成 **更新官方 Harness**（拉 npm 最新版）。这**不会**更新这个桌面壳。
 
 若你当前是从源码仓库启动，确认框会警告启动配置将改成 npm 包。可用 **选择已有的 Harness 文件夹** 切回去。
 
@@ -83,8 +95,8 @@
 
 | 你看到的 | 怎么处理 |
 |---|---|
-| 这台电脑上还没有 DeepSeek Harness | 确认 **安装官方 Harness**，或 **选择已有的 Harness 文件夹**。 |
-| 需要先安装 Node.js 22.19+ 或 24 | 用那个按钮，装 **22.19+ 或 24（不要装 20）**，再回来。 |
+| 这台电脑上还没有 DeepSeek Harness | 确认 **安装官方 Harness** 或 **安装运行时和官方 Harness**，或 **选择已有的 Harness 文件夹**。 |
+| 没有可用的 Node.js 22.19+ 或 24 | 用 **安装运行时和官方 Harness**，或高级里只装本应用 Node / 从 nodejs.org 装系统 Node（不要装 20）。 |
 | npm 退出码非 0 | 网络 / 源。壳已经用 npmmirror 重试过。可写 `npmRegistry`，或自己安装再选文件夹。 |
 | 一直不出现 `dsh web: http://127.0.0.1:…` | 官方包已拉起但没有就绪。打开 **后端控制台** 看日志；或把路径指到源码仓库。 |
 | `'dsh' 不是内部或外部命令` / `ENOENT` | PATH 上没有 `dsh`。用一键安装，或选择文件夹。 |
@@ -103,7 +115,9 @@
 | **后端控制台** | 重新打开启动页（日志、版本、高级）。官方界面起来之后也不会丢掉。 |
 | **在浏览器中打开** | 用系统浏览器打开同一套官方 UI。 |
 | **复制访问地址** | 复制当前 `http://127.0.0.1:<端口>`。 |
-| **安装官方 Harness** / **更新官方 Harness** | 在本应用目录里 npm 安装或更新 `@deepseek-ai/dsh`。会先确认。不更新壳。 |
+| **安装运行时和官方 Harness** | 没有可用 Node 时出现。先下载本应用官方 Node，再装官方 Harness。 |
+| **安装官方 Harness** / **更新官方 Harness** | 在本应用目录里 npm 安装或更新 `@deepseek-ai/dsh`。系统 Node 合格就用系统的。会先确认。不更新壳。 |
+| **只安装本应用 Node** | 只把官方 Node 下到 `bundled-node`。不写入系统 PATH。装过之后这一项会隐藏。 |
 | **选择已有的 Harness 文件夹…** | 文件夹选择框；校验仓库或 `dsh`。 |
 | **重启后端** | 只重启 `dsh web`。窗口会跟到新端口。 |
 | **查看后端日志** | 打开 `%APPDATA%\DSH Desktop\logs`。 |
@@ -117,7 +131,7 @@
 
 启动页或官方窗口里按 F12 打开开发者工具。
 
-启动页顶部会一直显示壳版本、Harness 版本和种类、Node 版本，以及正在用的路径。
+启动页顶部会一直显示壳版本、Harness 版本和种类、Node 版本以及它是 **系统** 还是 **本应用**，还有正在用的路径。
 
 ---
 
@@ -184,6 +198,8 @@
 
 日志：`%APPDATA%\DSH Desktop\logs\backend.log`（超过 5 MB 轮转为 `.old`）。日志时间戳跟壳的语言走。
 
+本应用 Node（可选）：`%APPDATA%\DSH Desktop\bundled-node`。不在系统 PATH 上。用这份 Node 时，启动配置的 `env.PATH` 会把该目录前置。
+
 ---
 
 ## 壳和官方 Harness 怎么对接
@@ -241,6 +257,7 @@ $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'; node node_module
 - 安装包未签名，首次运行可能出现 SmartScreen。
 - 壳的自动更新只对 Setup 安装版生效。
 - 官方 Harness 界面的语言不由本壳控制。
-- 官方 Harness 仍然需要本机 **系统** Node.js 22.19+ 或 24+；壳不内嵌这份运行时。
+- 官方 Harness 仍然需要真正的官方 `node.exe`+`npm`（不是 Electron 里那份）。Setup 安装包不含这份 zip；壳可以按需下载到 `bundled-node`，或使用本机已有的合格系统 Node。
+- 本应用 Node 只在 Windows x64 提供（和这份 Setup 一样）。
 - 仅 Windows x64。
 - 尚未实现：开机自启、全局快捷键、多 profile 切换。

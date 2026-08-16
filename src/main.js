@@ -21,8 +21,9 @@ import { resolveLaunchFromDir } from './harness.js';
 import { Supervisor } from './supervisor.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
 import { startUpdater } from './updater.js';
-import { probeEnvironment } from './probe.js';
+import { launchEnvForNode, probeEnvironment } from './probe.js';
 import { deployOfficial } from './deploy.js';
+import { BUNDLED_NODE_VERSION, bundledNodeRoot, ensureBundledNode } from './bundled-node.js';
 import { getLocale, setLocale, strings, t } from './i18n.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,26 +65,47 @@ function currentProbe() {
  * 用户已经写明 checkout 或绝对路径时不改。
  */
 function applyDiscoveredLaunch(probe) {
-  if (supervisor === null || probe.harness.kind === 'missing') return;
+  if (supervisor === null || probe.harness.kind === 'missing' || !probe.node.ok) return;
+  const env = launchEnvForNode(probe.node);
   const config = supervisor.config;
-  if (config.cwd && isCheckout(config.cwd)) return;
-  if (config.command && fs.existsSync(config.command)) return;
+  const pathReady = !probe.node.home || String(config.env?.PATH || '').includes(probe.node.home);
+
+  if (config.cwd && isCheckout(config.cwd)) {
+    const command = probe.node.source === 'bundled' ? probe.node.path : config.command;
+    if (command !== config.command || !pathReady) {
+      supervisor.config = saveConfig({ command, env: { ...(config.env || {}), ...env } });
+    }
+    return;
+  }
+  if (config.command && fs.existsSync(config.command)) {
+    if (!pathReady) supervisor.config = saveConfig({ env: { ...(config.env || {}), ...env } });
+    return;
+  }
   if (probe.harness.kind === 'checkout') {
     supervisor.config = saveConfig({
-      command: 'node',
+      command: probe.node.source === 'bundled' ? probe.node.path : 'node',
       args: [...SOURCE_LAUNCH_ARGS],
       cwd: probe.harness.detail,
       shell: false,
+      env,
     });
     return;
   }
   if (probe.harness.kind === 'runtime') {
-    supervisor.config = saveConfig(officialRuntimeLaunch());
+    supervisor.config = saveConfig(officialRuntimeLaunch(probe.node));
     return;
   }
   if (probe.harness.kind === 'path') {
-    supervisor.config = saveConfig({ command: probe.harness.detail, args: ['web'], cwd: '', shell: true });
+    supervisor.config = saveConfig({ command: probe.harness.detail, args: ['web'], cwd: '', env, shell: true });
   }
+}
+
+function startIfReady(probe) {
+  if (probe.harness.kind === 'missing' || !probe.node.ok || supervisor === null) return false;
+  applyDiscoveredLaunch(probe);
+  if (supervisor.child !== null) supervisor.restart();
+  else supervisor.start();
+  return true;
 }
 
 function kindLabel(kind) {
@@ -174,9 +196,8 @@ function createSplash() {
   splashWin.on('focus', () => {
     const probe = currentProbe();
     pushProbe();
-    if (probe.harness.kind !== 'missing' && supervisor !== null && supervisor.child === null && supervisor.state !== 'starting') {
-      applyDiscoveredLaunch(probe);
-      supervisor.start();
+    if (supervisor !== null && supervisor.child === null && supervisor.state !== 'starting') {
+      startIfReady(probe);
     }
   });
   wireDevtoolsToggle(splashWin);
@@ -306,6 +327,30 @@ function rebuildTray() {
   if (tray === null) return;
   const url = supervisor?.url ?? null;
   const officialInstalled = hasOfficialRuntime();
+  const probe = supervisor ? currentProbe() : null;
+  const installHarness = officialInstalled
+    ? {
+        label: t('trayUpdateOfficial'),
+        click: () => {
+          showConsole();
+          void confirmAndDeploy({ update: true });
+        },
+      }
+    : !probe?.node.ok
+      ? {
+          label: t('trayInstallRuntime'),
+          click: () => {
+            showConsole();
+            void confirmAndInstallRuntimeAndHarness();
+          },
+        }
+      : {
+          label: t('trayDeploy'),
+          click: () => {
+            showConsole();
+            void confirmAndDeploy({ update: false });
+          },
+        };
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: t('trayShow'), click: showAnyWindow },
@@ -325,13 +370,18 @@ function rebuildTray() {
         },
       },
       { type: 'separator' },
-      {
-        label: officialInstalled ? t('trayUpdateOfficial') : t('trayDeploy'),
-        click: () => {
-          showConsole();
-          void confirmAndDeploy({ update: officialInstalled });
-        },
-      },
+      installHarness,
+      ...(probe?.node.source === 'bundled'
+        ? []
+        : [
+            {
+              label: t('trayInstallBundledNode'),
+              click: () => {
+                showConsole();
+                void confirmBundledNodeOnly();
+              },
+            },
+          ]),
       { label: t('trayPick'), click: () => void pickHarnessFolder() },
       { label: t('trayRestart'), click: () => supervisor.restart() },
       {
@@ -440,13 +490,13 @@ async function pickHarnessFolder() {
     });
     return { ok: false, error: t('pickInvalid') };
   }
-  const config = saveConfig(launch);
+  const config = saveConfig({ ...launch, env: launchEnvForNode(currentProbe().node) });
   supervisor.config = config;
   supervisor.attempts = 0;
-  if (supervisor.child !== null) supervisor.restart();
-  else supervisor.start();
+  const probe = currentProbe();
+  startIfReady(probe);
   pushProbe();
-  return { ok: true, detail: launch.cwd || launch.command };
+  return { ok: true, detail: launch.cwd || launch.command, needsNode: !probe.node.ok };
 }
 
 async function confirmAndDeploy({ update = false } = {}) {
@@ -472,25 +522,80 @@ async function confirmAndDeploy({ update = false } = {}) {
   return runOfficialDeploy();
 }
 
+function onInstallLog(line) {
+  if (supervisor !== null) supervisor.log(line);
+}
+
+async function runOfficialDeployUnlocked() {
+  const result = await deployOfficial({ onLog: onInstallLog });
+  if (result.ok) {
+    supervisor.config = result.config;
+    supervisor.attempts = 0;
+    if (supervisor.child !== null) supervisor.restart();
+    else supervisor.start();
+    pushProbe();
+  }
+  return result;
+}
+
 /** 从 npm 安装官方 @deepseek-ai/dsh 到本应用目录，成功后按新配置拉起后端。 */
 async function runOfficialDeploy() {
   if (deploying) return { ok: false, error: t('deployingWait') };
   deploying = true;
   showConsole();
   try {
-    const result = await deployOfficial({
-      onLog: line => {
-        if (supervisor !== null) supervisor.log(line);
-      },
-    });
-    if (result.ok) {
-      supervisor.config = result.config;
-      supervisor.attempts = 0;
-      if (supervisor.child !== null) supervisor.restart();
-      else supervisor.start();
-      pushProbe();
-    }
-    return result;
+    return await runOfficialDeployUnlocked();
+  } finally {
+    deploying = false;
+  }
+}
+
+async function confirmAndInstallRuntimeAndHarness() {
+  if (deploying) return { ok: false, error: t('deployingWait') };
+  const { response } = await dialog.showMessageBox(parentWin(), {
+    type: 'question',
+    title: t('runtimeConfirmTitle'),
+    message: t('runtimeConfirmTitle'),
+    detail: t('runtimeConfirmBody', {
+      version: BUNDLED_NODE_VERSION,
+      nodeDir: bundledNodeRoot(),
+      harnessDir: officialRuntimeDir(),
+    }),
+    buttons: [t('deployConfirm'), t('cancel')],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response !== 0) return { ok: false, cancelled: true };
+  deploying = true;
+  showConsole();
+  try {
+    const nodeResult = await ensureBundledNode({ onLog: onInstallLog });
+    if (!nodeResult.ok) return nodeResult;
+    pushProbe();
+    return await runOfficialDeployUnlocked();
+  } finally {
+    deploying = false;
+  }
+}
+
+async function confirmBundledNodeOnly() {
+  if (deploying) return { ok: false, error: t('deployingWait') };
+  const { response } = await dialog.showMessageBox(parentWin(), {
+    type: 'question',
+    title: t('bundledConfirmTitle'),
+    message: t('bundledConfirmTitle'),
+    detail: t('bundledConfirmBody', { version: BUNDLED_NODE_VERSION, nodeDir: bundledNodeRoot() }),
+    buttons: [t('deployConfirm'), t('cancel')],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response !== 0) return { ok: false, cancelled: true };
+  deploying = true;
+  showConsole();
+  try {
+    const nodeResult = await ensureBundledNode({ onLog: onInstallLog });
+    pushProbe();
+    return nodeResult;
   } finally {
     deploying = false;
   }
@@ -516,6 +621,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('get-snapshot', () => supervisor.snapshot());
     ipcMain.handle('probe-environment', () => currentProbe());
     ipcMain.handle('deploy-official', () => confirmAndDeploy({ update: hasOfficialRuntime() }));
+    ipcMain.handle('install-runtime-and-harness', () => confirmAndInstallRuntimeAndHarness());
+    ipcMain.handle('install-bundled-node', () => confirmBundledNodeOnly());
     ipcMain.handle('pick-harness', () => pickHarnessFolder());
     ipcMain.handle('open-nodejs', () => explainAndOpenNode());
     ipcMain.handle('open-config', () => {
@@ -530,11 +637,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('reprobe-and-start', () => {
       supervisor.config = loadConfig();
       const next = currentProbe();
-      if (next.harness.kind !== 'missing') {
-        applyDiscoveredLaunch(next);
-        if (supervisor.child !== null) supervisor.restart();
-        else supervisor.start();
-      }
+      startIfReady(next);
       pushProbe();
       return next;
     });
@@ -554,6 +657,8 @@ if (!app.requestSingleInstanceLock()) {
     const probe = currentProbe();
     if (probe.harness.kind === 'missing') {
       supervisor.log(t('missingLog'));
+    } else if (!probe.node.ok) {
+      supervisor.log(t('needNode'));
     } else {
       applyDiscoveredLaunch(probe);
       supervisor.start();

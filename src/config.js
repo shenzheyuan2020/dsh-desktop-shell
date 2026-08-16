@@ -36,9 +36,14 @@ export function officialRuntimeBin() {
   return path.join(officialRuntimeDir(), 'node_modules', '.bin', name);
 }
 
-/** @returns {Record<string, unknown>} 指向本应用已部署官方包的启动配置。 */
-export function officialRuntimeLaunch() {
-  return { command: officialRuntimeBin(), args: ['web'], cwd: '', env: {}, shell: true };
+/**
+ * @param {null | {home?: string}} [node] 用于前置 PATH 的 Node 目录（便携 Node 必须带上）。
+ * @returns {Record<string, unknown>} 指向本应用已部署官方包的启动配置。
+ */
+export function officialRuntimeLaunch(node = null) {
+  const env = {};
+  if (node?.home) env.PATH = `${node.home}${path.delimiter}${process.env.PATH || ''}`;
+  return { command: officialRuntimeBin(), args: ['web'], cwd: '', env, shell: true };
 }
 
 /**
