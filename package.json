@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-shell",
   "productName": "DSH Desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "壳核分离的 DeepSeek Harness 桌面外壳：监督本机 dsh web 后端并以原生窗口承载其 GUI",
   "author": "shenzheyuan2020",

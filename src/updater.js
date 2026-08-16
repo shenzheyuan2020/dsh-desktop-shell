@@ -12,31 +12,39 @@ const { autoUpdater } = require('electron-updater');
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 8000;
 
+/** 只有 NSIS 安装版才走自动更新；免安装目录 / 开发模式会误检或装错位置。 */
+function canAutoUpdate() {
+  if (!app.isPackaged) return false;
+  const exe = app.getPath('exe').replaceAll('\\', '/').toLowerCase();
+  return !exe.includes('/win-unpacked/') && !exe.includes('/dist/');
+}
+
 /**
  * @typedef {{kind: 'dev' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error', version?: string, message?: string}} UpdateState
  */
 
 /**
  * 挂上自动更新。打包版启动后延迟检查，之后每 6 小时再查一次。
- * @param {{onState?: (state: UpdateState) => void}} [options] 状态变化回调（托盘文案用）。
+ * @param {{onState?: (state: UpdateState) => void, onBeforeInstall?: () => void}} [options] 状态回调；安装前钩子用于放行关窗（避免被托盘逻辑拦下）。
  * @returns {{check: (opts?: {userInitiated?: boolean}) => Promise<void>, quitAndInstall: () => void, getState: () => UpdateState}} 检查、安装与当前状态。
  */
 export function startUpdater(options = {}) {
+  const enabled = canAutoUpdate();
   /** @type {UpdateState} */
-  let state = { kind: app.isPackaged ? 'idle' : 'dev' };
+  let state = { kind: enabled ? 'idle' : 'dev' };
   const emit = next => {
     state = next;
     options.onState?.(state);
   };
 
   const check = async ({ userInitiated = false } = {}) => {
-    if (!app.isPackaged) {
+    if (!enabled) {
       if (userInitiated) {
         await dialog.showMessageBox({
           type: 'info',
           title: 'DSH Desktop',
-          message: '开发模式不检查更新',
-          detail: '自动更新只对安装包 / 打包版生效。发布新版本后，已安装用户会在启动时或点「检查更新」时收到。',
+          message: '当前运行方式不检查更新',
+          detail: '自动更新只对「DSH-Desktop-Setup」安装版生效。请从 GitHub Releases 下载 Setup 安装；开发模式和 win-unpacked 免安装目录不会自动升级。',
         });
       }
       return;
@@ -50,9 +58,9 @@ export function startUpdater(options = {}) {
     emit({ kind: 'checking' });
     try {
       const result = await autoUpdater.checkForUpdates();
-      const update = result?.updateInfo;
-      const incoming = update?.version;
-      if (!incoming || incoming === app.getVersion()) {
+      const incoming = result?.updateInfo?.version;
+      const available = result?.isUpdateAvailable ?? (Boolean(incoming) && incoming !== app.getVersion());
+      if (!available) {
         emit({ kind: 'idle' });
         if (userInitiated) {
           await dialog.showMessageBox({
@@ -61,6 +69,13 @@ export function startUpdater(options = {}) {
             message: `已是最新版本 ${app.getVersion()}`,
           });
         }
+      } else if (userInitiated) {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: 'DSH Desktop',
+          message: `发现新版本 ${incoming}`,
+          detail: '正在后台下载，完成后会提示重启安装；也可稍后从托盘安装。',
+        });
       }
     } catch (error) {
       const message = String(error?.message ?? error);
@@ -76,7 +91,7 @@ export function startUpdater(options = {}) {
     }
   };
 
-  if (app.isPackaged) {
+  if (enabled) {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = console;
@@ -105,7 +120,10 @@ export function startUpdater(options = {}) {
         defaultId: 0,
         cancelId: 1,
       });
-      if (response === 0) autoUpdater.quitAndInstall(false, true);
+      if (response === 0) {
+        options.onBeforeInstall?.();
+        autoUpdater.quitAndInstall(false, true);
+      }
     });
     autoUpdater.on('error', error => {
       emit({ kind: 'error', message: String(error?.message ?? error) });
@@ -120,7 +138,10 @@ export function startUpdater(options = {}) {
 
   return {
     check,
-    quitAndInstall: () => autoUpdater.quitAndInstall(false, true),
+    quitAndInstall: () => {
+      options.onBeforeInstall?.();
+      autoUpdater.quitAndInstall(false, true);
+    },
     getState: () => state,
   };
 }

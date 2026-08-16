@@ -261,6 +261,9 @@ if (!app.requestSingleInstanceLock()) {
         updateState = next;
         rebuildTray();
       },
+      onBeforeInstall: () => {
+        quitting = true;
+      },
     });
     updateState = updater.getState();
     wireSupervisor();

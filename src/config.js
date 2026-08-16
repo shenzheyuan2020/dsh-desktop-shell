@@ -1,44 +1,28 @@
 /** 配置加载：%APPDATA%/DSH Desktop/config.json，缺失时写入默认值并返回。 */
 import { app, dialog } from 'electron';
-import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const SOURCE_ARGS = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web'];
-const LOCAL_CHECKOUT = 'E:\\30_软件游戏\\Opt\\DSH';
+// 维护者本机的源码仓库；其他机器命中不了该路径，会走 DSH_CHECKOUT 或 PATH 上的 dsh。
+const KNOWN_CHECKOUTS = ['E:\\30_软件游戏\\Opt\\DSH'];
 
 /** @param {string | undefined} dir 是否为可源码启动的 DSH 仓库。 */
 function isCheckout(dir) {
   return Boolean(dir) && fs.existsSync(path.join(dir, 'apps', 'cli', 'src', 'bin.ts'));
 }
 
-/** @returns {string} PATH 上的 dsh 可执行文件；没有则空串。 */
-function resolveDshOnPath() {
-  try {
-    const command = process.platform === 'win32' ? 'where.exe dsh' : 'command -v dsh';
-    return execSync(command, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
-      .trim()
-      .split(/\r?\n/)[0];
-  } catch {
-    return '';
-  }
-}
-
 /**
- * 按本机环境挑选默认启动方式：本机源码仓库优先，其次 PATH 上的 dsh。
+ * 按本机环境挑选默认启动方式：已知源码仓库 → 环境变量 DSH_CHECKOUT 指向的仓库 → PATH 上的 dsh。
  * @returns {{command: string, args: string[], cwd: string, env: Record<string, string>, shell: boolean}} 默认配置。
  */
 export function defaultConfig() {
-  if (isCheckout(LOCAL_CHECKOUT)) {
-    return { command: 'node', args: [...SOURCE_ARGS], cwd: LOCAL_CHECKOUT, env: {}, shell: false };
+  for (const dir of [...KNOWN_CHECKOUTS, process.env.DSH_CHECKOUT]) {
+    if (isCheckout(dir)) {
+      return { command: 'node', args: [...SOURCE_ARGS], cwd: dir, env: {}, shell: false };
+    }
   }
-  const fromEnv = process.env.DSH_HOME;
-  if (isCheckout(fromEnv)) {
-    return { command: 'node', args: [...SOURCE_ARGS], cwd: fromEnv, env: {}, shell: false };
-  }
-  if (resolveDshOnPath()) {
-    return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true };
-  }
+  // npm 全局安装的 dsh 在 Windows 上是 .cmd 垫片，必须经 shell 启动。
   return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true };
 }
 
