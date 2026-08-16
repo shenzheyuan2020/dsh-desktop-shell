@@ -7,7 +7,7 @@
 | | 链接 |
 |---|---|
 | 下载安装包 | [Releases](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest) |
-| 当前版本 | 0.1.3（Windows x64） |
+| 当前版本 | 0.1.4（Windows x64） |
 
 ---
 
@@ -16,7 +16,7 @@
 ### 1. 下载并安装壳
 
 1. 打开 [最新 Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)。
-2. 下载 **`DSH-Desktop-Setup-0.1.3.exe`**（大约 95 MB）。不要下 Source code 压缩包。
+2. 下载 **`DSH-Desktop-Setup-0.1.4.exe`**（大约 95 MB）。不要下 Source code 压缩包。
 3. 双击安装。安装包未签名，Windows SmartScreen 可能拦截：点 **「更多信息」→「仍要运行」**。
 4. 装完从开始菜单或桌面打开 **DSH Desktop**。
 

@@ -65,7 +65,9 @@
 <pre id="log"></pre>
 <footer>
   <button id="deploy">部署官方 DSH</button>
+  <button id="reprobe" class="secondary">重新检测</button>
   <button id="nodejs" class="secondary">安装 Node.js</button>
+  <button id="editConfig" class="secondary">我已安装，填写路径</button>
   <button id="restart">重启后端</button>
   <span class="hint">部署需要网络 · API Key 在官方界面里填写 · F12 开发者工具</span>
 </footer>
@@ -128,6 +130,17 @@
   });
   document.getElementById('restart').addEventListener('click', () => { window.dshShell.restart(); });
   nodeBtn.addEventListener('click', () => { window.dshShell.openNodejs(); });
+  document.getElementById('editConfig').addEventListener('click', () => { window.dshShell.openConfig(); });
+  document.getElementById('reprobe').addEventListener('click', async () => {
+    statusEl.textContent = '正在重新检测本机…';
+    const probe = await window.dshShell.reprobeAndStart();
+    renderProbe(probe);
+    if (probe.harness.kind !== 'missing' && probe.node.ok) {
+      setupEl.classList.remove('visible');
+      statusEl.textContent = '已检测到官方 Harness，正在启动…';
+      dotEl.className = 'dot starting';
+    }
+  });
   deployBtn.addEventListener('click', async () => {
     deployBtn.disabled = true;
     statusEl.textContent = '正在从 npm 安装官方 @deepseek-ai/dsh…';

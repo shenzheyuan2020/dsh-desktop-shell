@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('dshShell', {
   probe: () => ipcRenderer.invoke('probe-environment'),
   deployOfficial: () => ipcRenderer.invoke('deploy-official'),
   openNodejs: () => ipcRenderer.invoke('open-nodejs'),
+  openConfig: () => ipcRenderer.invoke('open-config'),
+  reprobeAndStart: () => ipcRenderer.invoke('reprobe-and-start'),
 });

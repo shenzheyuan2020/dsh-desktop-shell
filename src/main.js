@@ -272,6 +272,18 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('open-nodejs', () => {
       openExternal('https://nodejs.org/');
     });
+    ipcMain.handle('open-config', () => {
+      void shell.openPath(configPath());
+    });
+    ipcMain.handle('reprobe-and-start', () => {
+      supervisor.config = loadConfig();
+      const next = probeEnvironment();
+      if (next.harness.kind !== 'missing') {
+        if (supervisor.child !== null) supervisor.restart();
+        else supervisor.start();
+      }
+      return next;
+    });
     updater = startUpdater({
       onState: next => {
         updateState = next;
