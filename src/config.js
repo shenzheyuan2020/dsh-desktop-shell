@@ -2,6 +2,7 @@
 import { app, dialog } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { t } from './i18n.js';
 
 const SOURCE_ARGS = ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web'];
 // 维护者本机的源码仓库；其他机器命中不了该路径，会走 DSH_CHECKOUT、本应用已部署的官方包，或 PATH 上的 dsh。
@@ -35,11 +36,11 @@ export function officialRuntimeLaunch() {
 export function defaultConfig() {
   for (const dir of [...KNOWN_CHECKOUTS, process.env.DSH_CHECKOUT]) {
     if (isCheckout(dir)) {
-      return { command: 'node', args: [...SOURCE_ARGS], cwd: dir, env: {}, shell: false };
+      return { command: 'node', args: [...SOURCE_ARGS], cwd: dir, env: {}, shell: false, locale: 'en' };
     }
   }
-  if (fs.existsSync(officialRuntimeBin())) return officialRuntimeLaunch();
-  return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true };
+  if (fs.existsSync(officialRuntimeBin())) return { ...officialRuntimeLaunch(), locale: 'en' };
+  return { command: 'dsh', args: ['web'], cwd: '', env: {}, shell: true, locale: 'en' };
 }
 
 /**
@@ -66,7 +67,7 @@ export function loadConfig() {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     return { ...defaults, ...parsed };
   } catch (error) {
-    dialog.showErrorBox('DSH Desktop 配置无效', `${file}\n\n${String(error)}\n\n本次启动使用内置默认配置；修复该文件后重启壳生效。`);
+    dialog.showErrorBox(t('configBadTitle'), t('configBadBody', { file, error: String(error) }));
     return { ...defaults };
   }
 }

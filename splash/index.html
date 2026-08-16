@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:" />
@@ -13,6 +13,10 @@
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
   }
   header { display: flex; align-items: center; gap: 12px; padding: 18px 20px 10px; }
+  .grow { flex: 1; }
+  .lang { display: flex; gap: 6px; }
+  .lang button { padding: 5px 10px; font-size: 12px; }
+  .lang button.active { background: #134e4a; color: #5eead4; border-color: #2dd4bf55; }
   .mark {
     width: 40px; height: 40px; border-radius: 10px; background: #1e293b;
     display: flex; align-items: center; justify-content: center;
@@ -52,30 +56,70 @@
 <body>
 <header>
   <div class="mark">&gt;_</div>
-  <div>
+  <div class="grow">
     <h1>DSH Desktop</h1>
-    <div class="sub">DeepSeek Harness 桌面壳 · 壳核分离</div>
+    <div class="sub" id="subtitle">Desktop shell for official DeepSeek Harness</div>
+  </div>
+  <div class="lang">
+    <button id="langEn" class="secondary active" type="button">English</button>
+    <button id="langZh" class="secondary" type="button">中文</button>
   </div>
 </header>
-<div class="status"><span class="dot starting" id="dot"></span><span id="statusText">正在检测本机环境…</span></div>
+<div class="status"><span class="dot starting" id="dot"></span><span id="statusText">Checking this machine…</span></div>
 <div id="setup">
-  <p><strong>还没有官方 DeepSeek Harness</strong> — 本壳不内嵌官方源码。只要本机有合格的 Node.js，就可以从 npm 安装官方包 <code>@deepseek-ai/dsh</code>，装到本应用目录，然后打开官方原版界面。</p>
+  <p><strong id="setupTitle">Official DeepSeek Harness was not found</strong> — <span id="setupBody">This shell does not bundle official source. If Node.js is installed, you can install the official npm package @deepseek-ai/dsh into this app folder and then open the official UI.</span></p>
   <p id="setupDetail"></p>
 </div>
 <pre id="log"></pre>
 <footer>
-  <button id="deploy">部署官方 DSH</button>
-  <button id="reprobe" class="secondary">重新检测</button>
-  <button id="nodejs" class="secondary">安装 Node.js</button>
-  <button id="editConfig" class="secondary">我已安装，填写路径</button>
-  <button id="restart">重启后端</button>
-  <span class="hint">部署需要网络 · API Key 在官方界面里填写 · F12 开发者工具</span>
+  <button id="deploy">Install official DSH</button>
+  <button id="reprobe" class="secondary">Check again</button>
+  <button id="nodejs" class="secondary">Install Node.js</button>
+  <button id="editConfig" class="secondary">I already installed it — set the path</button>
+  <button id="restart">Restart backend</button>
+  <span class="hint" id="hint">Install needs network · Enter the API key in the official UI · F12 for DevTools</span>
 </footer>
 <script>
   const logEl = document.getElementById('log');
   const dotEl = document.getElementById('dot');
   const statusEl = document.getElementById('statusText');
+  const setupEl = document.getElementById('setup');
+  const setupDetail = document.getElementById('setupDetail');
+  const deployBtn = document.getElementById('deploy');
   const MAX_DOM_LINES = 500;
+  let S = {};
+  let lastProbe = null;
+  let lastStatus = null;
+
+  function fill(key, vars) {
+    let text = S[key] || key;
+    for (const [name, value] of Object.entries(vars || {})) text = text.split('{' + name + '}').join(String(value ?? ''));
+    return text;
+  }
+
+  function applyStatic() {
+    document.documentElement.lang = document.documentElement.dataset.locale === 'zh' ? 'zh-CN' : 'en';
+    document.getElementById('subtitle').textContent = fill('subtitle');
+    document.getElementById('setupTitle').textContent = fill('setupTitle');
+    document.getElementById('setupBody').textContent = fill('setupBody');
+    deployBtn.textContent = fill('deploy');
+    document.getElementById('reprobe').textContent = fill('reprobe');
+    document.getElementById('nodejs').textContent = fill('installNode');
+    document.getElementById('editConfig').textContent = fill('editConfig');
+    document.getElementById('restart').textContent = fill('restart');
+    document.getElementById('hint').textContent = fill('hint');
+    const locale = document.documentElement.dataset.locale || 'en';
+    document.getElementById('langEn').classList.toggle('active', locale === 'en');
+    document.getElementById('langZh').classList.toggle('active', locale === 'zh');
+  }
+
+  function applyBundle(bundle) {
+    S = bundle.strings;
+    document.documentElement.dataset.locale = bundle.locale;
+    applyStatic();
+    if (lastStatus) renderStatus(lastStatus);
+    if (lastProbe) renderProbe(lastProbe);
+  }
 
   function append(line) {
     logEl.textContent += line + '\n';
@@ -85,39 +129,42 @@
   }
 
   function renderStatus(status) {
+    lastStatus = status;
     dotEl.className = 'dot';
-    if (status.state === 'starting') { dotEl.classList.add('starting'); statusEl.textContent = '正在启动后端…'; }
-    else if (status.state === 'ready') { dotEl.classList.add('ready'); statusEl.textContent = '后端已就绪：' + status.url + '，正在打开主界面…'; }
-    else if (status.state === 'restarting') { dotEl.classList.add('starting'); statusEl.textContent = '后端已退出，' + Math.round((status.delayMs || 0) / 1000) + 's 后自动重启（第 ' + status.attempts + ' 次）…'; }
-    else if (status.state === 'failed') { dotEl.classList.add('bad'); statusEl.textContent = '连续启动失败——请检查下方日志，修复后点击「重启后端」。'; }
-    else if (status.state === 'stopped') { dotEl.classList.add('bad'); statusEl.textContent = '后端已停止。'; }
+    if (status.state === 'starting') { dotEl.classList.add('starting'); statusEl.textContent = fill('starting'); }
+    else if (status.state === 'ready') { dotEl.classList.add('ready'); statusEl.textContent = fill('ready', { url: status.url }); }
+    else if (status.state === 'restarting') { dotEl.classList.add('starting'); statusEl.textContent = fill('restarting', { sec: Math.round((status.delayMs || 0) / 1000), n: status.attempts }); }
+    else if (status.state === 'failed') { dotEl.classList.add('bad'); statusEl.textContent = fill('failed'); }
+    else if (status.state === 'stopped') { dotEl.classList.add('bad'); statusEl.textContent = fill('stopped'); }
   }
 
-  const setupEl = document.getElementById('setup');
-  const setupDetail = document.getElementById('setupDetail');
-  const deployBtn = document.getElementById('deploy');
-  const nodeBtn = document.getElementById('nodejs');
-
   function renderProbe(probe) {
+    lastProbe = probe;
     const missing = probe.harness.kind === 'missing';
     setupEl.classList.toggle('visible', missing || !probe.node.ok);
     if (!probe.node.ok) {
       setupDetail.textContent = probe.node.reason;
       deployBtn.disabled = true;
-      statusEl.textContent = '需要先安装合格的 Node.js，才能部署官方 DSH。';
+      statusEl.textContent = fill('needNode');
       dotEl.className = 'dot bad';
       return;
     }
     deployBtn.disabled = false;
     if (missing) {
-      setupDetail.textContent = '检测到 Node ' + probe.node.version + '。点「部署官方 DSH」将从 npm 安装官方包（需要网络，大约一两分钟）。';
-      statusEl.textContent = '未检测到官方 Harness，可以一键部署。';
+      setupDetail.textContent = fill('nodeOkDeploy', { version: probe.node.version });
+      statusEl.textContent = fill('missingHarness');
       dotEl.className = 'dot';
     } else {
-      setupDetail.textContent = '已找到：' + probe.harness.kind + ' · ' + probe.harness.detail;
+      setupDetail.textContent = fill('foundHarness', { kind: probe.harness.kind, detail: probe.harness.detail });
     }
   }
 
+  async function setLang(locale) {
+    applyBundle(await window.dshShell.setLocale(locale));
+  }
+
+  window.dshShell.getUi().then(applyBundle);
+  window.dshShell.onLocale(applyBundle);
   window.dshShell.getSnapshot().then(snapshot => {
     snapshot.lines.forEach(append);
     renderStatus(snapshot);
@@ -129,29 +176,31 @@
     if (status.state === 'failed') window.dshShell.probe().then(renderProbe);
   });
   document.getElementById('restart').addEventListener('click', () => { window.dshShell.restart(); });
-  nodeBtn.addEventListener('click', () => { window.dshShell.openNodejs(); });
+  document.getElementById('nodejs').addEventListener('click', () => { window.dshShell.openNodejs(); });
   document.getElementById('editConfig').addEventListener('click', () => { window.dshShell.openConfig(); });
+  document.getElementById('langEn').addEventListener('click', () => { setLang('en'); });
+  document.getElementById('langZh').addEventListener('click', () => { setLang('zh'); });
   document.getElementById('reprobe').addEventListener('click', async () => {
-    statusEl.textContent = '正在重新检测本机…';
+    statusEl.textContent = fill('reprobing');
     const probe = await window.dshShell.reprobeAndStart();
     renderProbe(probe);
     if (probe.harness.kind !== 'missing' && probe.node.ok) {
       setupEl.classList.remove('visible');
-      statusEl.textContent = '已检测到官方 Harness，正在启动…';
+      statusEl.textContent = fill('foundStarting');
       dotEl.className = 'dot starting';
     }
   });
   deployBtn.addEventListener('click', async () => {
     deployBtn.disabled = true;
-    statusEl.textContent = '正在从 npm 安装官方 @deepseek-ai/dsh…';
+    statusEl.textContent = fill('deploying');
     dotEl.className = 'dot starting';
     const result = await window.dshShell.deployOfficial();
     if (result.ok) {
       setupEl.classList.remove('visible');
-      statusEl.textContent = '官方包已部署，正在启动…';
+      statusEl.textContent = fill('deployed');
     } else {
       deployBtn.disabled = false;
-      statusEl.textContent = '部署失败：' + result.error;
+      statusEl.textContent = fill('deployFailed', { error: result.error });
       dotEl.className = 'dot bad';
       append(result.error);
     }

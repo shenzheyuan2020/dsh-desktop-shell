@@ -10,6 +10,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
+import { t } from './i18n.js';
 
 const READY_PREFIX = 'dsh web: ';
 const BACKOFF_MS = [1000, 3000, 10000];
@@ -88,19 +89,19 @@ export class Supervisor extends EventEmitter {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (error) {
-      this.log(`启动失败：${String(error)}`);
+      this.log(t('spawnFail', { error: String(error) }));
       this.scheduleRestart();
       return;
     }
     this.child = child;
-    child.on('error', error => this.log(`进程错误：${String(error)}`));
+    child.on('error', error => this.log(t('procError', { error: String(error) })));
     for (const stream of [child.stdout, child.stderr]) {
       if (stream) readline.createInterface({ input: stream }).on('line', line => this.onLine(line));
     }
     child.on('exit', (code, signal) => {
       this.child = null;
       clearTimeout(this.stableTimer);
-      this.log(`后端进程退出（code=${code ?? 'null'} signal=${signal ?? 'null'}）`);
+      this.log(t('procExit', { code: code ?? 'null', signal: signal ?? 'null' }));
       if (this.userStopped) {
         this.setState('stopped');
         return;
@@ -133,7 +134,7 @@ export class Supervisor extends EventEmitter {
     const delay = BACKOFF_MS[this.attempts];
     this.attempts += 1;
     this.setState('restarting', { delayMs: delay });
-    this.log(`${delay / 1000}s 后自动重启（第 ${this.attempts}/${BACKOFF_MS.length} 次）`);
+    this.log(t('autoRestart', { sec: delay / 1000, n: this.attempts, max: BACKOFF_MS.length }));
     this.restartTimer = setTimeout(() => this.start(), delay);
   }
 

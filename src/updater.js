@@ -5,6 +5,7 @@
  */
 import { app, dialog, Notification } from 'electron';
 import { createRequire } from 'node:module';
+import { t } from './i18n.js';
 
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require('electron-updater');
@@ -43,15 +44,15 @@ export function startUpdater(options = {}) {
         await dialog.showMessageBox({
           type: 'info',
           title: 'DSH Desktop',
-          message: '当前运行方式不检查更新',
-          detail: '自动更新只对「DSH-Desktop-Setup」安装版生效。请从 GitHub Releases 下载 Setup 安装；开发模式和 win-unpacked 免安装目录不会自动升级。',
+          message: t('updateDevTitle'),
+          detail: t('updateDevDetail'),
         });
       }
       return;
     }
     if (state.kind === 'checking' || state.kind === 'downloading') {
       if (userInitiated) {
-        await dialog.showMessageBox({ type: 'info', title: 'DSH Desktop', message: '正在检查或下载更新，请稍候。' });
+        await dialog.showMessageBox({ type: 'info', title: 'DSH Desktop', message: t('updateBusy') });
       }
       return;
     }
@@ -66,15 +67,15 @@ export function startUpdater(options = {}) {
           await dialog.showMessageBox({
             type: 'info',
             title: 'DSH Desktop',
-            message: `已是最新版本 ${app.getVersion()}`,
+            message: t('updateLatest', { version: app.getVersion() }),
           });
         }
       } else if (userInitiated) {
         await dialog.showMessageBox({
           type: 'info',
           title: 'DSH Desktop',
-          message: `发现新版本 ${incoming}`,
-          detail: '正在后台下载，完成后会提示重启安装；也可稍后从托盘安装。',
+          message: t('updateFound', { version: incoming }),
+          detail: t('updateFoundDetail'),
         });
       }
     } catch (error) {
@@ -83,8 +84,8 @@ export function startUpdater(options = {}) {
       if (userInitiated) {
         await dialog.showMessageBox({
           type: 'error',
-          title: '检查更新失败',
-          message: '无法联系 GitHub Releases。',
+          title: t('updateFailTitle'),
+          message: t('updateFailBody'),
           detail: message,
         });
       }
@@ -99,8 +100,8 @@ export function startUpdater(options = {}) {
       emit({ kind: 'available', version: info.version });
       try {
         new Notification({
-          title: 'DSH Desktop 有新版本',
-          body: `${info.version} 正在后台下载。完成后可从托盘安装。`,
+          title: t('updateNotifyTitle'),
+          body: t('updateNotifyBody', { version: info.version }),
         }).show();
       } catch {
         /* 通知权限缺失时仍走托盘状态 */
@@ -113,10 +114,10 @@ export function startUpdater(options = {}) {
       emit({ kind: 'ready', version: info.version });
       const { response } = await dialog.showMessageBox({
         type: 'info',
-        title: '更新已就绪',
-        message: `DSH Desktop ${info.version} 已下载完成。`,
-        detail: '现在重启安装，或稍后从托盘选择「安装更新并重启」。后端会随壳一起退出。',
-        buttons: ['现在重启安装', '稍后'],
+        title: t('updateReadyTitle'),
+        message: t('updateReadyBody', { version: info.version }),
+        detail: t('updateReadyDetail'),
+        buttons: [t('updateNow'), t('updateLater')],
         defaultId: 0,
         cancelId: 1,
       });

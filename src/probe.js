@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { isCheckout, officialRuntimeBin, KNOWN_CHECKOUTS } from './config.js';
+import { t } from './i18n.js';
 
 /**
  * @param {string} command 要在 PATH 上查找的可执行文件名。
@@ -56,9 +57,9 @@ export function probeEnvironment() {
     }
   }
   let reason = '';
-  if (!nodePath) reason = '未找到系统 Node.js。请先安装 Node.js 22.19 或 24 以上（不要只用 Electron 自带的运行时）。';
-  else if (!npmPath) reason = '找到了 node，但没有 npm。请重装官方 Node.js 安装包。';
-  else if (!nodeSatisfies(version)) reason = `当前 Node 是 ${version || '未知版本'}，官方 DSH 需要 22.19+ 或 24+。`;
+  if (!nodePath) reason = t('nodeMissing');
+  else if (!npmPath) reason = t('npmMissing');
+  else if (!nodeSatisfies(version)) reason = t('nodeOld', { version: version || t('nodeUnknown') });
 
   const node = { ok: Boolean(nodePath && npmPath && nodeSatisfies(version)), version, path: nodePath, npm: npmPath, reason };
 

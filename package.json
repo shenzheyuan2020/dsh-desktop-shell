@@ -1,9 +1,9 @@
 {
   "name": "dsh-desktop-shell",
   "productName": "DSH Desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": false,
-  "description": "壳核分离的 DeepSeek Harness 桌面外壳：监督本机 dsh web 后端并以原生窗口承载其 GUI",
+  "description": "Desktop shell for official DeepSeek Harness: launches dsh web and loads the official UI in a native window",
   "author": "shenzheyuan2020",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,8 @@
     "scripts",
     "build/icon.ico",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "README.zh.md"
   ],
   "repository": {
     "type": "git",

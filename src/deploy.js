@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import { officialRuntimeBin, officialRuntimeDir, officialRuntimeLaunch, saveConfig } from './config.js';
 import { probeEnvironment, which } from './probe.js';
+import { t } from './i18n.js';
 
 const OFFICIAL_PACKAGE = '@deepseek-ai/dsh';
 
@@ -24,9 +25,9 @@ export function deployOfficial(options = {}) {
   const npm = which('npm');
   const dir = officialRuntimeDir();
   fs.mkdirSync(dir, { recursive: true });
-  log(`将安装官方包 ${OFFICIAL_PACKAGE} 到：`);
+  log(t('deployTo', { pkg: OFFICIAL_PACKAGE }));
   log(dir);
-  log(`$ npm install --prefix <runtime> ${OFFICIAL_PACKAGE}`);
+  log(t('deployCmd', { pkg: OFFICIAL_PACKAGE }));
 
   return new Promise(resolve => {
     const child = spawn(npm, ['install', '--prefix', dir, OFFICIAL_PACKAGE], {
@@ -46,12 +47,12 @@ export function deployOfficial(options = {}) {
       if (code !== 0 || !fs.existsSync(bin)) {
         resolve({
           ok: false,
-          error: `npm 退出码 ${code ?? 'null'}。请检查网络 / npm 源，或本机先手动执行 npm install -g ${OFFICIAL_PACKAGE}。`,
+          error: t('deployNpmFail', { code: code ?? 'null', pkg: OFFICIAL_PACKAGE }),
         });
         return;
       }
       const config = saveConfig(officialRuntimeLaunch());
-      log(`已写入启动配置：${bin}`);
+      log(t('deployWrote', { bin }));
       resolve({ ok: true, config, versionLine: OFFICIAL_PACKAGE });
     });
   });

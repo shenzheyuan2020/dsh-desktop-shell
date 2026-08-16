@@ -5,12 +5,13 @@
 import { app, BrowserWindow, Menu, Tray, shell, ipcMain, clipboard } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, configPath } from './config.js';
+import { loadConfig, configPath, saveConfig } from './config.js';
 import { Supervisor } from './supervisor.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
 import { startUpdater } from './updater.js';
 import { probeEnvironment } from './probe.js';
 import { deployOfficial } from './deploy.js';
+import { getLocale, setLocale, strings, t } from './i18n.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const asset = name => path.join(here, '..', 'assets', name);
@@ -141,13 +142,26 @@ function showAnyWindow() {
 
 /** @returns {string} 托盘「检查更新」一项的当前文案。 */
 function updateMenuLabel() {
-  if (updateState.kind === 'checking') return '正在检查更新…';
+  if (updateState.kind === 'checking') return t('trayUpdating');
   if (updateState.kind === 'available' || updateState.kind === 'downloading') {
-    return `正在下载 ${updateState.version ?? ''}…`.trim();
+    return t('trayDownloading', { version: updateState.version ?? '' }).trim();
   }
-  if (updateState.kind === 'ready') return `安装更新 ${updateState.version} 并重启`;
-  if (updateState.kind === 'error') return '检查更新失败（再试一次）';
-  return '检查更新';
+  if (updateState.kind === 'ready') return t('trayInstall', { version: updateState.version });
+  if (updateState.kind === 'error') return t('trayUpdateFailed');
+  return t('trayUpdate');
+}
+
+function uiBundle() {
+  return { locale: getLocale(), strings: strings() };
+}
+
+function applyLocale(next) {
+  setLocale(next);
+  saveConfig({ locale: getLocale() });
+  rebuildTray();
+  if (splashWin !== null && !splashWin.isDestroyed()) {
+    splashWin.webContents.send('locale-changed', uiBundle());
+  }
 }
 
 /** 按后端与更新状态重建托盘菜单。 */
@@ -156,16 +170,16 @@ function rebuildTray() {
   const url = supervisor?.url ?? null;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: '显示窗口', click: showAnyWindow },
+      { label: t('trayShow'), click: showAnyWindow },
       {
-        label: '在浏览器中打开',
+        label: t('trayBrowser'),
         enabled: url !== null,
         click: () => {
           if (supervisor.url !== null) openExternal(supervisor.url);
         },
       },
       {
-        label: '复制访问地址',
+        label: t('trayCopy'),
         enabled: url !== null,
         click: () => {
           if (supervisor.url !== null) clipboard.writeText(supervisor.url);
@@ -173,25 +187,32 @@ function rebuildTray() {
       },
       { type: 'separator' },
       {
-        label: '部署官方 DSH',
+        label: t('trayDeploy'),
         click: () => {
           if (splashWin === null) createSplash();
           else splashWin.show();
           void runOfficialDeploy();
         },
       },
-      { label: '重启后端', click: () => supervisor.restart() },
+      { label: t('trayRestart'), click: () => supervisor.restart() },
       {
-        label: '查看后端日志',
+        label: t('trayLogs'),
         click: () => {
           void shell.openPath(path.join(app.getPath('userData'), 'logs'));
         },
       },
       {
-        label: '编辑配置（重启壳后生效）',
+        label: t('trayConfig'),
         click: () => {
           void shell.openPath(configPath());
         },
+      },
+      {
+        label: t('trayLanguage'),
+        submenu: [
+          { label: 'English', type: 'radio', checked: getLocale() === 'en', click: () => applyLocale('en') },
+          { label: '中文', type: 'radio', checked: getLocale() === 'zh', click: () => applyLocale('zh') },
+        ],
       },
       { type: 'separator' },
       {
@@ -207,12 +228,12 @@ function rebuildTray() {
         },
       },
       {
-        label: '打开发布页',
+        label: t('trayReleases'),
         click: () => openExternal('https://github.com/shenzheyuan2020/dsh-desktop-shell/releases'),
       },
       { type: 'separator' },
       {
-        label: '退出（结束后端）',
+        label: t('trayQuit'),
         click: () => {
           quitting = true;
           app.quit();
@@ -264,6 +285,7 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     const config = loadConfig();
+    setLocale(config.locale);
     supervisor = new Supervisor(config, path.join(app.getPath('userData'), 'logs'));
     ipcMain.handle('restart-backend', () => supervisor.restart());
     ipcMain.handle('get-snapshot', () => supervisor.snapshot());
@@ -274,6 +296,11 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.handle('open-config', () => {
       void shell.openPath(configPath());
+    });
+    ipcMain.handle('get-ui', () => uiBundle());
+    ipcMain.handle('set-locale', (_event, next) => {
+      applyLocale(next);
+      return uiBundle();
     });
     ipcMain.handle('reprobe-and-start', () => {
       supervisor.config = loadConfig();
@@ -299,7 +326,7 @@ if (!app.requestSingleInstanceLock()) {
     createSplash();
     const probe = probeEnvironment();
     if (probe.harness.kind === 'missing') {
-      supervisor.log('未检测到官方 DeepSeek Harness。可在启动页点击「部署官方 DSH」。');
+      supervisor.log(t('missingLog'));
     } else {
       supervisor.start();
     }
@@ -308,7 +335,7 @@ if (!app.requestSingleInstanceLock()) {
 
 /** 从 npm 安装官方 @deepseek-ai/dsh 到本应用目录，成功后按新配置拉起后端。 */
 async function runOfficialDeploy() {
-  if (deploying) return { ok: false, error: '正在部署，请稍候。' };
+  if (deploying) return { ok: false, error: t('deployingWait') };
   deploying = true;
   if (splashWin === null) createSplash();
   else splashWin.show();
