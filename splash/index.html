@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:" />
+<title>DSH Desktop</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: #0f172a; color: #e2e8f0;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  header { display: flex; align-items: center; gap: 12px; padding: 18px 20px 10px; }
+  .mark {
+    width: 40px; height: 40px; border-radius: 10px; background: #1e293b;
+    display: flex; align-items: center; justify-content: center;
+    color: #2dd4bf; font: 700 18px/1 Consolas, monospace; letter-spacing: -1px;
+  }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .status { display: flex; align-items: center; gap: 8px; padding: 4px 20px 10px; font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; }
+  .dot.ready { background: #34d399; }
+  .dot.bad { background: #f87171; }
+  .dot.starting { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  pre {
+    flex: 1; margin: 0 20px; padding: 12px; overflow: auto;
+    background: #020617; border: 1px solid #1e293b; border-radius: 8px;
+    font: 12px/1.5 Consolas, "Courier New", monospace; color: #94a3b8; white-space: pre-wrap; word-break: break-all;
+  }
+  footer { display: flex; gap: 10px; align-items: center; padding: 12px 20px 16px; }
+  button {
+    background: #134e4a; color: #5eead4; border: 1px solid #2dd4bf55;
+    padding: 7px 18px; border-radius: 7px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #115e59; }
+  .hint { font-size: 12px; color: #475569; }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark">&gt;_</div>
+  <div>
+    <h1>DSH Desktop</h1>
+    <div class="sub">DeepSeek Harness 桌面壳 · 壳核分离</div>
+  </div>
+</header>
+<div class="status"><span class="dot starting" id="dot"></span><span id="statusText">正在启动后端…</span></div>
+<pre id="log"></pre>
+<footer>
+  <button id="restart">重启后端</button>
+  <span class="hint">后端就绪后自动进入主界面 · F12 打开开发者工具</span>
+</footer>
+<script>
+  const logEl = document.getElementById('log');
+  const dotEl = document.getElementById('dot');
+  const statusEl = document.getElementById('statusText');
+  const MAX_DOM_LINES = 500;
+
+  function append(line) {
+    logEl.textContent += line + '\n';
+    const lines = logEl.textContent.split('\n');
+    if (lines.length > MAX_DOM_LINES) logEl.textContent = lines.slice(-MAX_DOM_LINES).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function renderStatus(status) {
+    dotEl.className = 'dot';
+    if (status.state === 'starting') { dotEl.classList.add('starting'); statusEl.textContent = '正在启动后端…'; }
+    else if (status.state === 'ready') { dotEl.classList.add('ready'); statusEl.textContent = '后端已就绪：' + status.url + '，正在打开主界面…'; }
+    else if (status.state === 'restarting') { dotEl.classList.add('starting'); statusEl.textContent = '后端已退出，' + Math.round((status.delayMs || 0) / 1000) + 's 后自动重启（第 ' + status.attempts + ' 次）…'; }
+    else if (status.state === 'failed') { dotEl.classList.add('bad'); statusEl.textContent = '连续启动失败——请检查下方日志，修复后点击「重启后端」。'; }
+    else if (status.state === 'stopped') { dotEl.classList.add('bad'); statusEl.textContent = '后端已停止。'; }
+  }
+
+  window.dshShell.getSnapshot().then(snapshot => {
+    snapshot.lines.forEach(append);
+    renderStatus(snapshot);
+  });
+  window.dshShell.onLog(append);
+  window.dshShell.onStatus(renderStatus);
+  document.getElementById('restart').addEventListener('click', () => { window.dshShell.restart(); });
+</script>
+</body>
+</html>

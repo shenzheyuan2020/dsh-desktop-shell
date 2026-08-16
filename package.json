@@ -1,0 +1,82 @@
+{
+  "name": "dsh-desktop-shell",
+  "productName": "DSH Desktop",
+  "version": "0.1.1",
+  "private": false,
+  "description": "壳核分离的 DeepSeek Harness 桌面外壳：监督本机 dsh web 后端并以原生窗口承载其 GUI",
+  "author": "shenzheyuan2020",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/main.js",
+  "bin": {
+    "dsh-desktop": "scripts/cli.mjs"
+  },
+  "files": [
+    "src",
+    "splash",
+    "assets",
+    "scripts",
+    "build/icon.ico",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shenzheyuan2020/dsh-desktop-shell.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shenzheyuan2020/dsh-desktop-shell/issues"
+  },
+  "homepage": "https://github.com/shenzheyuan2020/dsh-desktop-shell#readme",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "electron",
+    "desktop"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "build": {
+    "appId": "com.dsh.desktop-shell",
+    "productName": "DSH Desktop",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "splash/**",
+      "assets/**",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "shenzheyuan2020",
+      "repo": "dsh-desktop-shell"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "DSH Desktop",
+      "artifactName": "DSH-Desktop-Setup-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  }
+}

@@ -1,0 +1,8 @@
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+
+# app-builder-lib 声明 ^3.0.0 但实际使用 3.1.0 才有的 ElectronDownloadCacheMode 枚举；
+# 定向钉住其子依赖，不影响 electron 自带的 @electron/get@5。
+overrides:
+  "app-builder-lib>@electron/get": "3.1.0"
