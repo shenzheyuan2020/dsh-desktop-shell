@@ -28,21 +28,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $tag = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "v$((Get-Content package.json | ConvertFrom-Json).version)" }
-          $ver = (Get-Content package.json | ConvertFrom-Json).version
-          $notes = @"
-          DSH Desktop $ver —— 壳核分离桌面外壳。
-          安装后双击即可加载本机官方 ``dsh web`` 原生界面；本包只更新壳，不内嵌、不 fork DeepSeek Harness。
-          "@
-          $assets = Get-ChildItem dist -File | Where-Object { $_.Name -match 'DSH-Desktop-Setup|\.yml$|\.blockmap$' } | ForEach-Object { $_.FullName }
-          if (-not $assets) { throw 'no release assets in dist/' }
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag @assets --clobber
-          } else {
-            gh release create $tag @assets --title "DSH Desktop $ver" --notes $notes
-          }
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          make_latest: true
+          name: DSH Desktop ${{ github.ref_name }}
+          body: |
+            壳核分离桌面外壳。安装后双击即可加载本机官方 `dsh web` 原生界面；本包只更新壳，不内嵌、不 fork DeepSeek Harness。
+          files: |
+            dist/DSH-Desktop-Setup-*.exe
+            dist/DSH-Desktop-Setup-*.exe.blockmap
+            dist/latest.yml
+          fail_on_unmatched_files: true
