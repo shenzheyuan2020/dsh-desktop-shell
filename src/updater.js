@@ -2,8 +2,9 @@
  * 壳自身的自动更新（electron-updater + GitHub Releases）。
  * 只更新桌面壳安装包，不碰官方 dsh 源码或 Web GUI。
  * 开发模式（pnpm start）没有安装包元数据，只提示、不检查。
+ * macOS 包未签名，electron-updater 无法应用更新：只提示并引导去 Releases 手动换包。
  */
-import { app, dialog, Notification } from 'electron';
+import { app, dialog, Notification, shell } from 'electron';
 import { createRequire } from 'node:module';
 import { t } from './i18n.js';
 
@@ -13,8 +14,9 @@ const { autoUpdater } = require('electron-updater');
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 8000;
 
-/** 只有 NSIS 安装版才走自动更新；免安装目录 / 开发模式会误检或装错位置。 */
+/** 只有 Windows NSIS 安装版才走自动更新；未签名的 macOS 包装不上，免安装目录 / 开发模式会误检或装错位置。 */
 function canAutoUpdate() {
+  if (process.platform === 'darwin') return false;
   if (!app.isPackaged) return false;
   const exe = app.getPath('exe').replaceAll('\\', '/').toLowerCase();
   return !exe.includes('/win-unpacked/') && !exe.includes('/dist/');
@@ -41,6 +43,21 @@ export function startUpdater(options = {}) {
   const check = async ({ userInitiated = false } = {}) => {
     if (!enabled) {
       if (userInitiated) {
+        if (process.platform === 'darwin') {
+          const { response } = await dialog.showMessageBox({
+            type: 'info',
+            title: 'DSH Desktop',
+            message: t('updateMacTitle'),
+            detail: t('updateMacDetail'),
+            buttons: [t('updateMacOpenReleases'), t('cancel')],
+            defaultId: 0,
+            cancelId: 1,
+          });
+          if (response === 0) {
+            void shell.openExternal('https://github.com/shenzheyuan2020/dsh-desktop-shell/releases');
+          }
+          return;
+        }
         await dialog.showMessageBox({
           type: 'info',
           title: 'DSH Desktop',

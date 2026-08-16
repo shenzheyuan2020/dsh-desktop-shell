@@ -14,7 +14,11 @@ import { t } from './i18n.js';
 /** 满足官方 `^22.19 || >=24` 的钉扎版本；升级时改这一处。 */
 export const BUNDLED_NODE_VERSION = '24.18.1';
 
-const ARCHIVE = `node-v${BUNDLED_NODE_VERSION}-win-x64.zip`;
+/** win32 用官方 zip（node.exe 平铺），darwin 用官方 tar.gz（bin/ 布局）；SHASUMS256.txt 两平台同一份。 */
+const ARCHIVE =
+  process.platform === 'win32'
+    ? `node-v${BUNDLED_NODE_VERSION}-win-x64.zip`
+    : `node-v${BUNDLED_NODE_VERSION}-darwin-${process.arch}.tar.gz`;
 const ALLOWED_HOSTS = new Set(['nodejs.org', 'npmmirror.com', 'cdn.npmmirror.com']);
 const ZIP_URLS = [
   `https://nodejs.org/dist/v${BUNDLED_NODE_VERSION}/${ARCHIVE}`,
@@ -25,23 +29,30 @@ const SUM_URLS = [
   `https://npmmirror.com/mirrors/node/v${BUNDLED_NODE_VERSION}/SHASUMS256.txt`,
 ];
 
-/** @returns {string} `%APPDATA%/DSH Desktop/bundled-node` */
+/** @returns {string} userData（如 `DSH Desktop`）下的 bundled-node 目录。 */
 export function bundledNodeRoot() {
   return path.join(app.getPath('userData'), 'bundled-node');
 }
 
 /**
  * @param {string} dir 目录。
- * @returns {null | {node: string, npm: string, home: string}} 找到的 node/npm。
+ * @returns {null | {node: string, npm: string, home: string}} 找到的 node/npm；home 指向装可执行文件的目录（用于前置 PATH）。
  */
 function findNodeInDir(dir) {
   if (!dir || !fs.existsSync(dir)) return null;
   const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
   const npmName = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const direct = path.join(dir, nodeName);
-  if (fs.existsSync(direct) && fs.existsSync(path.join(dir, npmName))) {
-    return { node: direct, npm: path.join(dir, npmName), home: dir };
-  }
+  // Windows zip 把 node.exe 平铺在解压根；darwin tar.gz 放在 bin/ 下。两种布局都探，home 取实际所在目录。
+  const probe = base => {
+    for (const home of [base, path.join(base, 'bin')]) {
+      const node = path.join(home, nodeName);
+      const npm = path.join(home, npmName);
+      if (fs.existsSync(node) && fs.existsSync(npm)) return { node, npm, home };
+    }
+    return null;
+  };
+  const direct = probe(dir);
+  if (direct) return direct;
   let entries = [];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -50,10 +61,8 @@ function findNodeInDir(dir) {
   }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const home = path.join(dir, entry.name);
-    const node = path.join(home, nodeName);
-    const npm = path.join(home, npmName);
-    if (fs.existsSync(node) && fs.existsSync(npm)) return { node, npm, home };
+    const found = probe(path.join(dir, entry.name));
+    if (found) return found;
   }
   return null;
 }
@@ -188,13 +197,13 @@ function hashFromSums(text, filename) {
 }
 
 /**
- * 若便携 Node 已可用则直接返回；否则下载官方 zip、校验 SHA-256、解压到 AppData。
+ * 若便携 Node 已可用则直接返回；否则下载官方归档、校验 SHA-256、解压到本应用目录。
  * @param {{onLog?: (line: string) => void}} [options]
  * @returns {Promise<{ok: true, node: string, npm: string, home: string} | {ok: false, error: string}>}
  */
 export async function ensureBundledNode(options = {}) {
   const log = line => options.onLog?.(line);
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return { ok: false, error: t('bundledUnsupported') };
   }
   const existing = findBundledRuntime();
@@ -206,7 +215,7 @@ export async function ensureBundledNode(options = {}) {
   const root = bundledNodeRoot();
   const downloadDir = path.join(root, 'download');
   fs.mkdirSync(downloadDir, { recursive: true });
-  const zipPath = path.join(downloadDir, ARCHIVE);
+  const archivePath = path.join(downloadDir, ARCHIVE);
   log(t('bundledDownloading', { version: BUNDLED_NODE_VERSION }));
 
   let downloaded = false;
@@ -215,7 +224,7 @@ export async function ensureBundledNode(options = {}) {
     try {
       log(url);
       let lastPct = -1;
-      await downloadFile(url, zipPath, (got, total) => {
+      await downloadFile(url, archivePath, (got, total) => {
         const pct = Math.floor((got / total) * 10) * 10;
         if (pct !== lastPct) {
           lastPct = pct;
@@ -245,10 +254,10 @@ export async function ensureBundledNode(options = {}) {
   if (!expected) {
     return { ok: false, error: t('bundledSumFail') };
   }
-  const actual = await sha256File(zipPath);
+  const actual = await sha256File(archivePath);
   if (actual !== expected) {
     try {
-      fs.unlinkSync(zipPath);
+      fs.unlinkSync(archivePath);
     } catch {
       /* 校验失败后尽量删掉坏包，删不掉也不继续解压 */
     }
@@ -257,7 +266,8 @@ export async function ensureBundledNode(options = {}) {
   log(t('bundledVerified'));
 
   log(t('bundledExtracting'));
-  const extract = spawnSync('tar', ['-xf', zipPath, '-C', root], {
+  // Windows 10+ 自带的 bsdtar 解 zip，macOS 的 bsdtar 解 tar.gz——同一条命令两平台通用。
+  const extract = spawnSync('tar', ['-xf', archivePath, '-C', root], {
     windowsHide: true,
     encoding: 'utf8',
   });
@@ -269,7 +279,7 @@ export async function ensureBundledNode(options = {}) {
     return { ok: false, error: t('bundledMissingExe') };
   }
   try {
-    fs.unlinkSync(zipPath);
+    fs.unlinkSync(archivePath);
   } catch {
     /* 压缩包残留只占空间，不影响使用 */
   }

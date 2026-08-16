@@ -6,7 +6,7 @@
 [![CI](https://github.com/shenzheyuan2020/dsh-desktop-shell/actions/workflows/ci.yml/badge.svg)](https://github.com/shenzheyuan2020/dsh-desktop-shell/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-把官方 DeepSeek Harness（`dsh web`）放进 Windows 桌面窗口：系统托盘、关窗进托盘、崩溃自动重启、首次可一键安装运行时与官方 CLI，「更新壳」与「更新官方 Harness」彼此独立。
+把官方 DeepSeek Harness（`dsh web`）放进 Windows / macOS 桌面窗口：系统托盘、关窗进托盘、崩溃自动重启、首次可一键安装运行时与官方 CLI，「更新壳」与「更新官方 Harness」彼此独立。
 
 **壳是我们的，窗口里的界面是官方原版。** 不 fork、不内嵌、不注入官方源码。官方 Harness 怎么升级，窗口里就是什么。
 
@@ -42,12 +42,22 @@
 
 ## 安装
 
+### Windows
+
 1. 打开 [最新 Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)。
 2. 下载 **`DSH-Desktop-Setup-<版本>.exe`**（约 95 MB）。不要下 Source code 压缩包——那是源码不是应用。
-3. 安装包未签名。SmartScreen 出现时点 **「更多信息」→「仍要运行」**。每个 Release 的说明里附有安装包 **SHA-256**，谨慎的话可用 `Get-FileHash` 核对。
+3. 安装包未签名。SmartScreen 出现时点 **「更多信息」→「仍要运行」**。每个 Release 的说明里附有各安装包 **SHA-256**，谨慎的话可用 `Get-FileHash` 核对。
 4. 从开始菜单或桌面快捷方式打开 **DSH Desktop**。
 
 请用 Setup 安装。壳的自动更新只对安装版生效；`dist/win-unpacked` 是开发产物，永远不会更新。
+
+### macOS
+
+1. 打开 [最新 Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)。
+2. Apple Silicon 下载 **`DSH-Desktop-<版本>-arm64.dmg`**，Intel 下载 **`DSH-Desktop-<版本>-x64.dmg`**。Release 说明里附有各 dmg 的 **SHA-256**，谨慎的话可用 `shasum -a 256` 核对。
+3. 打开 dmg，把 **DSH Desktop** 拖进 **Applications（应用程序）**。
+4. 应用未签名。首次打开：右键应用 →**「打开」**，或到 **系统设置 → 隐私与安全性** 点**「仍要打开」**；若仍被隔离拦下，执行 `xattr -cr "/Applications/DSH Desktop.app"`。
+5. macOS 上壳不自动更新：菜单栏图标的**检查壳更新**会打开 Releases 页——升级请重新下载 dmg。
 
 ## 第一次打开
 
@@ -55,19 +65,19 @@
 
 1. 当前 `config.json` 的启动路径（`cwd` 里的源码仓库，或你选过的 `dsh.cmd`）
 2. 环境变量 `DSH_CHECKOUT` 指向的克隆（目录里有 `apps/cli/src/bin.ts`）
-3. 本壳装过的官方 npm 包：`%APPDATA%\DSH Desktop\official-runtime`
+3. 本壳装过的官方 npm 包：应用数据目录下的 `official-runtime`（Windows `%APPDATA%\DSH Desktop`，macOS `~/Library/Application Support/DSH Desktop`）
 4. PATH 上的 `dsh` 命令
 
 找到任意一种就直接打开官方界面；一种都没有时，启动页停在一段短向导上——你不确认，壳不会擅自安装。
 
 ### 方式 A — 在壳里安装（不用 git clone）
 
-Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 npm）→ 已下到 `%APPDATA%\DSH Desktop\bundled-node` 的**本应用**官方 Node（不写系统 PATH）→ 都没有时由主按钮下载。
+Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 npm）→ 已下到应用数据目录 `bundled-node` 的**本应用**官方 Node（不写系统 PATH）→ 都没有时由主按钮下载。
 
 | 这台电脑 | 主按钮 | 会做什么 |
 |---|---|---|
 | 有合格系统 Node，没有 Harness | **安装官方 Harness** | 只用系统 Node，不多下载任何东西。 |
-| 没有合格 Node | **安装运行时和官方 Harness** | 下载官方 Node.js（Windows x64 zip，对官方校验和验证 SHA-256）到 `bundled-node`，再把 `@deepseek-ai/dsh` 装进 `official-runtime`。 |
+| 没有合格 Node | **安装运行时和官方 Harness** | 下载官方 Node.js（Windows x64 zip / macOS tar.gz，对官方校验和验证 SHA-256）到 `bundled-node`，再把 `@deepseek-ai/dsh` 装进 `official-runtime`。 |
 | 已选仓库或文件夹 | — | 直接打开官方界面。 |
 
 网络说明：Node 压缩包先试 nodejs.org 再试 npmmirror；npm 安装默认源失败自动用 `https://registry.npmmirror.com` 重试；`config.json` 里的 `"npmRegistry"` 可覆盖。
@@ -88,7 +98,7 @@ Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 
 
 ## 日常使用
 
-托盘图标是青色 `>_`。右键：
+托盘图标是青色 `>_`；macOS 上它在菜单栏。右键：
 
 | 项 | 含义 |
 |---|---|
@@ -100,27 +110,27 @@ Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 
 | **只安装本应用 Node** | 只下官方 Node 到 `bundled-node`；装过即隐藏。 |
 | **选择已有的 Harness 文件夹…** | 带校验的文件夹选择。 |
 | **重启后端** | 只重启 `dsh web`，窗口跟到新端口。 |
-| **查看后端日志** / **编辑 config.json** | `%APPDATA%\DSH Desktop\logs` / 配置文件。 |
+| **查看后端日志** / **编辑 config.json** | 应用数据目录下的 `logs` / `config.json`（[路径](#配置)）。 |
 | **语言 / Language** | English 或中文——只作用于壳。 |
 | **检查壳更新** / **打开壳的发布页** | GitHub Releases，只更新壳。 |
 | **退出（结束后端）** | 退出壳并结束 `dsh web`。 |
 
-关窗只是进托盘，后端继续跑（第一次会弹一次说明）。F12 打开开发者工具。窗口标题、托盘提示、启动页顶部始终显示壳版本、Harness 版本与种类、Node 是**系统**还是**本应用**。
+关窗只是进托盘——macOS 上对应菜单栏图标，后端继续跑（第一次会弹一次说明）。F12 打开开发者工具。窗口标题、托盘提示、启动页顶部始终显示壳版本、Harness 版本与种类、Node 是**系统**还是**本应用**。
 
 ## 更新：壳与官方 Harness
 
 两个互不相干的动作：
 
-- **壳** — Setup 安装版启动约 8 秒后检查 GitHub Releases，此后每 6 小时一次；也可用托盘**检查壳更新**。更新只替换壳本身。开发模式与 `win-unpacked` 永不自动更新。
+- **壳** — Windows Setup 安装版启动约 8 秒后检查 GitHub Releases，此后每 6 小时一次；也可用托盘**检查壳更新**。更新只替换壳本身。开发模式与 `win-unpacked` 永不自动更新。macOS 上壳没有自动更新：**检查壳更新**会打开 Releases 页——升级请重新下载 dmg。
 - **官方 Harness** — 托盘**更新官方 Harness** 对 `official-runtime` 里的 `@deepseek-ai/dsh` 跑 npm。不动 Setup 安装、你的源码仓库和 API Key。
 
 ## 语言
 
-首次运行跟随 Windows 显示语言（`zh*` → 中文，否则英文）。随时可在启动页右上角或托盘 **Language** 切换；选择持久化为 `config.json` 的 `"locale"`，立即生效。官方 Harness 界面有自己的语言设置，壳不去动它。
+首次运行跟随系统显示语言（`zh*` → 中文，否则英文）。随时可在启动页右上角或托盘 **Language** 切换；选择持久化为 `config.json` 的 `"locale"`，立即生效。官方 Harness 界面有自己的语言设置，壳不去动它。
 
 ## 配置
 
-文件：`%APPDATA%\DSH Desktop\config.json`（托盘**编辑 config.json**）。改 `command` / `args` / `cwd` 后点**重启后端**。
+文件：Windows 在 `%APPDATA%\DSH Desktop\config.json`，macOS 在 `~/Library/Application Support/DSH Desktop/config.json`（托盘**编辑 config.json**）。改 `command` / `args` / `cwd` 后点**重启后端**。
 
 什么都没找到时的默认值（首次写入语言跟系统）：
 
@@ -159,7 +169,7 @@ Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 
 | `closeToTrayHintShown` | 首次关窗说明弹过后写入。 |
 | `harnessVersion` | 官方包装好后写入；界面也会现场读 `package.json`。 |
 
-路径：日志 `%APPDATA%\DSH Desktop\logs\backend.log`（5 MB 轮转）；官方包在 `official-runtime`；本应用 Node 在 `bundled-node`。设好 `DSH_CHECKOUT` 后删除 `config.json` 再启动，可按新默认重写。
+路径（应用数据目录：Windows `%APPDATA%\DSH Desktop`，macOS `~/Library/Application Support/DSH Desktop`）：配置 `config.json`；日志 `logs/backend.log`（5 MB 轮转）；官方包在 `official-runtime`；本应用 Node 在 `bundled-node`。设好 `DSH_CHECKOUT` 后删除 `config.json` 再启动，可按新默认重写。
 
 ## 故障排查
 
@@ -171,6 +181,7 @@ Node 不必自己先装。壳按序使用：**系统** Node.js 22.19+/24+（带 
 | 一直不出现 `dsh web: http://127.0.0.1:…` | 后端起了但没就绪。**后端控制台**看日志；或指向源码仓库。 |
 | `'dsh' 不是内部或外部命令` / `ENOENT` | PATH 上没有。用安装按钮或选文件夹。 |
 | SmartScreen 拦截安装包 | 未签名构建：**更多信息 → 仍要运行**；不放心先按发版说明核对 SHA-256。 |
+| Gatekeeper 拒绝打开应用（macOS） | 未签名构建：右键 →**「打开」**，或 系统设置 → 隐私与安全性 →**「仍要打开」**；仍不行执行 `xattr -cr "/Applications/DSH Desktop.app"`。 |
 
 ## 开发
 
@@ -179,14 +190,15 @@ git clone https://github.com/shenzheyuan2020/dsh-desktop-shell.git
 cd dsh-desktop-shell
 pnpm install
 pnpm start          # 开发运行；此模式下壳不检查更新，属预期
-pnpm run dist       # 产出 NSIS 安装包与 latest.yml 到 dist/
+pnpm run dist       # 产出 NSIS 安装包与 latest.yml 到 dist/（在 Windows 上跑）
+pnpm run dist:mac   # 产出 arm64 + x64 两个 dmg 到 dist/（在 macOS 上跑）
 node scripts/check-i18n.mjs                         # 中英键位与占位符一致性
 node_modules/electron/dist/electron.exe scripts/shot.mjs   # 重新生成 README 截图
 ```
 
 开发机固定指向源码仓库：`setx DSH_CHECKOUT "D:\path\to\deepseek-harness"`，然后重启壳。
 
-CI（`.github/workflows/ci.yml`）在每次 push 与 PR 运行：全部 JS 语法检查、中英文案一致性、以及 `CHANGELOG.md` 必须含当前 `package.json` 版本的小节。
+CI（`.github/workflows/ci.yml`）在每次 push 与 PR 运行：全部 JS 语法检查、中英文案一致性、`CHANGELOG.md` 必须含当前 `package.json` 版本的小节，以及 Windows 与 macOS 的打包冒烟（`electron-builder --dir`）。
 
 pnpm 11 默认拦截依赖构建脚本；`pnpm-workspace.yaml` 已放行 `electron` 与 `electron-winstaller`。若缺 `node_modules/electron/dist/electron.exe`：
 
@@ -205,13 +217,13 @@ git tag vX.Y.Z
 git push origin main vX.Y.Z
 ```
 
-发版工作流构建安装包，用 `scripts/release-notes.mjs` 从更新日志小节 + 安装包 SHA-256 生成 Release 说明（缺任何一样都会失败），经 `action-gh-release` 发布。不要对同一标签再手动 `gh release create`。
+发版工作流在并行任务里构建 Windows 安装包与 macOS dmg（arm64 + x64），随后由发布任务用 `scripts/release-notes.mjs` 从更新日志小节 + 全部安装包 SHA-256 生成 Release 说明（缺任何一样都会失败），经 `action-gh-release` 发布。不要对同一标签再手动 `gh release create`。
 
 ## 已知限制
 
-- 安装包未签名（首次运行可能遇 SmartScreen）；仅 Windows x64。
-- 壳自动更新只对 Setup 安装版生效。
-- 官方 Harness 需要真正的官方 `node.exe`+`npm`（Electron 自带的跑不了）；Setup 不内置该 zip——壳按需下载，或用本机合格系统 Node。
+- 安装包未签名（Windows 遇 SmartScreen，macOS 遇 Gatekeeper）；仅 Windows x64 与 macOS arm64/x64。
+- 壳自动更新只对 Windows Setup 安装版生效；macOS 上**检查壳更新**改为打开 Releases 页。
+- 官方 Harness 需要真正的官方 `node`+`npm`（Electron 自带的跑不了）；安装包不内置——壳按需下载，或用本机合格系统 Node。
 - 官方界面的语言不由本壳控制。
 - 尚未实现：开机自启、全局快捷键、多 profile 切换。
 

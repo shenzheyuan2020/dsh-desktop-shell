@@ -16,6 +16,7 @@ import {
 } from './config.js';
 import { readJsonVersion } from './harness.js';
 import { probeEnvironment } from './probe.js';
+import { quoteForShell } from './shell-quote.js';
 import { t } from './i18n.js';
 import path from 'node:path';
 
@@ -36,8 +37,12 @@ function runNpmInstall(npm, dir, registry, log, nodeHome) {
   log(t('deployCmd', { pkg: OFFICIAL_PACKAGE }));
 
   return new Promise(resolve => {
-    const child = spawn(npm, ['install', '--prefix', dir, OFFICIAL_PACKAGE], {
-      shell: process.platform === 'win32',
+    // Windows 上 npm 是 .cmd，必须经 cmd 启动（shell:true），npm 路径与 --prefix 目录都可能含空格，先加引号；
+    // POSIX 走 shell:false 数组传参，天然不受空格影响，不要加引号。
+    const useShell = process.platform === 'win32';
+    const npmArgs = ['install', '--prefix', dir, OFFICIAL_PACKAGE];
+    const child = spawn(useShell ? quoteForShell(npm) : npm, useShell ? npmArgs.map(quoteForShell) : npmArgs, {
+      shell: useShell,
       windowsHide: true,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],

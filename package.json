@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-shell",
   "productName": "DSH Desktop",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "private": false,
   "description": "Desktop shell for official DeepSeek Harness: launches dsh web and loads the official UI in a native window",
   "author": "shenzheyuan2020",
@@ -39,7 +39,8 @@
   "scripts": {
     "start": "electron .",
     "icon": "node scripts/make-icon.mjs",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:mac": "electron-builder --mac dmg --arm64 --x64 --publish never"
   },
   "build": {
     "appId": "com.dsh.desktop-shell",
@@ -64,6 +65,20 @@
         "nsis"
       ],
       "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "artifactName": "DSH-Desktop-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

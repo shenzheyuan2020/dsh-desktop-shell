@@ -6,6 +6,25 @@ Release notes on GitHub are generated from this file by `scripts/release-notes.m
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；版本号遵循 SemVer（1.0 前）。
 GitHub 上的发版说明由 `scripts/release-notes.mjs` 从本文件生成。
 
+## [0.2.0] - 2026-08-16
+
+### Added
+
+- macOS support: unsigned dmg installers for Apple Silicon (arm64) and Intel (x64), with Gatekeeper first-open steps in the release notes and README.（macOS 支持：提供未签名 dmg（Apple Silicon arm64 / Intel x64），发版说明与 README 附 Gatekeeper 首次打开步骤）
+- macOS backend process-group management: quit and restart leave no orphan `dsh web` processes.（macOS 后端进程组管理：退出/重启不留孤儿进程）
+- macOS app-local official Node: downloads the darwin tar.gz, verifies its SHA-256, and extracts it — the same flow as on Windows.（macOS 便携 Node：下载 darwin tar.gz、校验 SHA-256、解压，与 Windows 同一流程）
+- macOS application menu (Cmd+C/V/Q), Dock click reopens the window, and menu bar icon sizing.（macOS 应用菜单（Cmd+C/V/Q）、点击 Dock 重开窗口、菜单栏图标尺寸适配）
+- CI packaging smoke: every push and PR runs `electron-builder --dir` on Windows and macOS to catch broken build config early.（CI 新增 Windows/macOS 打包冒烟，推送与 PR 即验证 electron-builder 配置可构建）
+
+### Changed
+
+- Shell auto-update is unavailable on macOS: Check for shell updates opens the GitHub Releases page instead.（macOS 上壳自动更新不可用，「检查壳更新」改为打开 GitHub Releases 页）
+- Release pipeline split into build and publish jobs; the Release now carries SHA-256 for every installer.（发布流水线拆分构建与发布，Release 附带全部安装包的 SHA-256）
+
+### Fixed
+
+- Paths containing spaces are now quoted when the backend is launched with `shell: true`; the same fix covers official-runtime deployment and launch on Windows.（修复 `shell: true` 启动时含空格路径未加引号的问题；Windows 的 official-runtime 部署/启动同样受影响，一并修复）
+
 ## [0.1.8] - 2026-08-16
 
 ### Added

@@ -25,3 +25,29 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md missing section for $VERSION"; exit 1; }
+
+  # 验证 electron-builder 配置在两平台可构建（--dir 只出未打包目录，不产安装包）。
+  pack-smoke:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Pack (Windows, unpacked dir)
+        if: matrix.os == 'windows-latest'
+        run: pnpm exec electron-builder --win --dir
+      - name: Pack (macOS, unpacked dir)
+        if: matrix.os == 'macos-latest'
+        run: pnpm exec electron-builder --mac --dir
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"

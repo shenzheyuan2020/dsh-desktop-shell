@@ -1,4 +1,4 @@
-/** 配置加载：%APPDATA%/DSH Desktop/config.json，缺失时写入默认值并返回。 */
+/** 配置加载：userData（DSH Desktop）目录下的 config.json，缺失时写入默认值并返回。 */
 import { app, dialog } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';

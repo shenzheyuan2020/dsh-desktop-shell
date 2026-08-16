@@ -53,7 +53,7 @@ const en = {
   kindPath: 'dsh on PATH',
   pickTitle: 'Choose a DeepSeek Harness folder',
   pickInvalid:
-    'That folder is not a Harness checkout or an installed dsh.\n\nUse a git clone that contains apps/cli/src/bin.ts, or a folder that contains dsh.cmd (or node_modules\\.bin\\dsh.cmd).',
+    'That folder is not a Harness checkout or an installed dsh.\n\nUse a git clone that contains apps/cli/src/bin.ts, or a folder that contains the dsh launcher (dsh.cmd on Windows, dsh on macOS), directly or under node_modules/.bin.',
   pickOk: 'Using {detail}. Starting…',
   nodeNeedTitle: 'Install system Node.js from nodejs.org?',
   nodeNeedBody:
@@ -61,22 +61,22 @@ const en = {
   nodeOpenDownload: 'Open Node.js download',
   runtimeConfirmTitle: 'Install app-local Node and official Harness?',
   runtimeConfirmBody:
-    'This downloads official Node.js {version} (Windows x64 zip) into:\n{nodeDir}\n\nIt does not add Node to the system PATH.\nThen it installs @deepseek-ai/dsh into:\n{harnessDir}\n\nNeeds network. API key is entered later in the official UI (Settings → Models).',
+    'This downloads the official Node.js {version} archive for this platform into:\n{nodeDir}\n\nIt does not add Node to the system PATH.\nThen it installs @deepseek-ai/dsh into:\n{harnessDir}\n\nNeeds network. API key is entered later in the official UI (Settings → Models).',
   bundledConfirmTitle: 'Install app-local Node only?',
   bundledConfirmBody:
     'This downloads official Node.js {version} into:\n{nodeDir}\n\nIt does not add Node to the system PATH and does not install Harness. Use Install official Harness afterwards if you want the official UI.',
   bundledDownloading: 'Downloading official Node.js {version}…',
   bundledProgress: 'Node download {pct}% ({mb} / {totalMb} MB)',
   bundledAlready: 'App-local Node already present: {home}',
-  bundledVerified: 'Node zip SHA-256 matches the official checksum.',
-  bundledExtracting: 'Extracting Node zip…',
+  bundledVerified: 'Node archive SHA-256 matches the official checksum.',
+  bundledExtracting: 'Extracting Node archive…',
   bundledReady: 'App-local Node is ready: {home}',
   bundledDownloadFail: 'Could not download official Node.js. {error}',
-  bundledSumFail: 'Could not download SHASUMS256.txt to verify the Node zip.',
-  bundledHashFail: 'Node zip SHA-256 did not match. The file was discarded.',
-  bundledExtractFail: 'Could not extract the Node zip: {error}',
-  bundledMissingExe: 'The Node zip extracted, but node.exe / npm.cmd were not found.',
-  bundledUnsupported: 'App-local Node is only offered on Windows.',
+  bundledSumFail: 'Could not download SHASUMS256.txt to verify the Node archive.',
+  bundledHashFail: 'Node archive SHA-256 did not match. The file was discarded.',
+  bundledExtractFail: 'Could not extract the Node archive: {error}',
+  bundledMissingExe: 'The Node archive extracted, but node / npm were not found.',
+  bundledUnsupported: 'App-local Node is not offered on this platform.',
   installingRuntime: 'Installing app-local Node, then official Harness…',
   installingBundled: 'Installing app-local Node…',
   bundledInstalled: 'App-local Node is ready.',
@@ -117,6 +117,8 @@ const en = {
   trayHintTitle: 'Still running in the tray',
   trayHintBody:
     'Closing the window hides DSH Desktop. The backend keeps running.\n\nTo quit, right-click the cyan >_ tray icon and choose Quit (stop backend).',
+  trayHintBodyMac:
+    'Closing the window hides DSH Desktop. The backend keeps running.\n\nTo quit, click the cyan >_ menu bar icon and choose Quit (stop backend).',
   nodeMissing: 'No system Node.js. Use Install runtime and official Harness for an app-local official Node, or install Node 22.19+ / 24 from nodejs.org (not Electron’s Node, and not Node 20).',
   npmMissing: 'node was found, but npm was not. Reinstall the official Node.js installer.',
   nodeOld: 'Node is {version}. Official Harness requires 22.19+ or 24+, not 18 or 20.',
@@ -137,6 +139,10 @@ const en = {
   updateDevTitle: 'Shell updates are not checked in this run mode',
   updateDevDetail:
     'Auto-update only works for the DSH-Desktop-Setup installer. Download Setup from GitHub Releases. Dev mode and the win-unpacked folder will not upgrade.\n\nUpdating official Harness is a separate tray action.',
+  updateMacTitle: 'Auto-update is not available on macOS',
+  updateMacDetail:
+    'The macOS build is unsigned, so in-app updates cannot be applied. Download the new .dmg from GitHub Releases and replace the app.\n\nUpdating official Harness is a separate tray action.',
+  updateMacOpenReleases: 'Open Releases',
   updateBusy: 'Already checking or downloading a shell update. Please wait.',
   updateLatest: 'This shell is the latest version {version}',
   updateFound: 'Shell update {version} is available',
@@ -200,7 +206,7 @@ const zh = {
   kindPath: 'PATH 上的 dsh',
   pickTitle: '选择 DeepSeek Harness 文件夹',
   pickInvalid:
-    '这个文件夹不是 Harness 源码仓库，也不是已安装的 dsh。\n\n请选带有 apps/cli/src/bin.ts 的 git 克隆，或里面有 dsh.cmd（或 node_modules\\.bin\\dsh.cmd）的目录。',
+    '这个文件夹不是 Harness 源码仓库，也不是已安装的 dsh。\n\n请选带有 apps/cli/src/bin.ts 的 git 克隆，或含 dsh 启动器（Windows 是 dsh.cmd，macOS 是 dsh；可在 node_modules/.bin 下）的目录。',
   pickOk: '将使用 {detail}，正在启动…',
   nodeNeedTitle: '要从 nodejs.org 安装系统 Node.js 吗？',
   nodeNeedBody:
@@ -208,7 +214,7 @@ const zh = {
   nodeOpenDownload: '打开 Node.js 下载页',
   runtimeConfirmTitle: '要安装本应用 Node 和官方 Harness 吗？',
   runtimeConfirmBody:
-    '将下载官方 Node.js {version}（Windows x64 zip）到：\n{nodeDir}\n\n不会写入系统 PATH。\n然后把 @deepseek-ai/dsh 装到：\n{harnessDir}\n\n需要网络。API Key 之后在官方界面的「设置 → 模型」里填写。',
+    '将下载本平台的官方 Node.js {version} 压缩包到：\n{nodeDir}\n\n不会写入系统 PATH。\n然后把 @deepseek-ai/dsh 装到：\n{harnessDir}\n\n需要网络。API Key 之后在官方界面的「设置 → 模型」里填写。',
   bundledConfirmTitle: '只安装本应用 Node 吗？',
   bundledConfirmBody:
     '将下载官方 Node.js {version} 到：\n{nodeDir}\n\n不写入系统 PATH，也不安装 Harness。之后如需官方界面，再点「安装官方 Harness」。',
@@ -222,8 +228,8 @@ const zh = {
   bundledSumFail: '无法下载 SHASUMS256.txt，不能校验 Node 压缩包。',
   bundledHashFail: 'Node 压缩包 SHA-256 不一致，已丢弃该文件。',
   bundledExtractFail: '无法解压 Node 压缩包：{error}',
-  bundledMissingExe: '压缩包已解开，但没有找到 node.exe / npm.cmd。',
-  bundledUnsupported: '本应用 Node 目前只在 Windows 上提供。',
+  bundledMissingExe: '压缩包已解开，但没有找到 node / npm。',
+  bundledUnsupported: '本应用 Node 在此平台上不提供。',
   installingRuntime: '正在安装本应用 Node，然后安装官方 Harness…',
   installingBundled: '正在安装本应用 Node…',
   bundledInstalled: '本应用 Node 已就绪。',
@@ -263,6 +269,8 @@ const zh = {
   trayHintTitle: '仍在托盘运行',
   trayHintBody:
     '关掉窗口只是把 DSH Desktop 藏到托盘，后端还在跑。\n\n要退出，请右键托盘里青色的 >_ 图标，选「退出（结束后端）」。',
+  trayHintBodyMac:
+    '关掉窗口只是把 DSH Desktop 藏进菜单栏，后端还在跑。\n\n要退出，请点菜单栏里青色的 >_ 图标，选「退出（结束后端）」。',
   nodeMissing: '没有系统 Node.js。请用「安装运行时和官方 Harness」下载本应用专用的官方 Node，或从 nodejs.org 安装 22.19+ / 24（不要用 Electron 自带的，也不要装 20）。',
   npmMissing: '找到了 node，但没有 npm。请重装官方 Node.js 安装包。',
   nodeOld: '当前 Node 是 {version}。官方 Harness 需要 22.19+ 或 24+，不能用 18 或 20。',
@@ -283,6 +291,10 @@ const zh = {
   updateDevTitle: '当前运行方式不检查壳更新',
   updateDevDetail:
     '自动更新只对「DSH-Desktop-Setup」安装版生效。请从 GitHub Releases 下载 Setup 安装；开发模式和 win-unpacked 免安装目录不会自动升级。\n\n更新官方 Harness 是托盘里另一项。',
+  updateMacTitle: 'macOS 上不提供自动更新',
+  updateMacDetail:
+    'macOS 版未签名，应用内更新无法生效。请到 GitHub Releases 下载新的 .dmg，替换现有应用。\n\n更新官方 Harness 是托盘里另一项。',
+  updateMacOpenReleases: '打开 Releases 页',
   updateBusy: '正在检查或下载壳更新，请稍候。',
   updateLatest: '壳已是最新版本 {version}',
   updateFound: '发现壳的新版本 {version}',

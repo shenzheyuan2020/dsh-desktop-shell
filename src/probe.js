@@ -1,11 +1,25 @@
 /** 探测本机能否运行官方 DeepSeek Harness：系统或本应用便携 Node/npm，以及源码仓库 / 官方包 / PATH 上的 dsh。 */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { isCheckout, officialRuntimeBin } from './config.js';
 import { findBundledRuntime } from './bundled-node.js';
 import { harnessVersion } from './harness.js';
 import { t } from './i18n.js';
+
+/**
+ * macOS 上从 Finder/Dock 启动的 GUI 进程只继承极简 PATH（/usr/bin:/bin:/usr/sbin:/sbin），
+ * Homebrew / Volta 装的 node、dsh 全都找不到。把常见安装目录里真实存在且尚未入 PATH 的
+ * 前置到 process.env.PATH，让 which/spawn 与终端里的结果一致。非 darwin 平台不做任何事。
+ */
+export function augmentDarwinPath() {
+  if (process.platform !== 'darwin') return;
+  const candidates = ['/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.volta', 'bin')];
+  const current = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const missing = candidates.filter(dir => fs.existsSync(dir) && !current.includes(dir));
+  if (missing.length > 0) process.env.PATH = [...missing, ...current].join(path.delimiter);
+}
 
 /**
  * @param {string} command 要在 PATH 上查找的可执行文件名。

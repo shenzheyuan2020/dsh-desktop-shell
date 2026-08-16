@@ -29,7 +29,70 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build NSIS
         run: pnpm run dist
-      # 说明来自 CHANGELOG.md 对应小节 + 安装包 SHA-256；缺一即失败，防止无说明发版。
+      # latest.yml 必须随 Release 发布：已装 Windows 用户靠它自动更新。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-dist
+          path: |
+            dist/DSH-Desktop-Setup-*.exe
+            dist/DSH-Desktop-Setup-*.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # 无签名证书：关闭自动发现后 electron-builder 落到 ad-hoc 签名。
+      - name: Build DMG (arm64 + x64)
+        run: pnpm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # 按实际产出找 .app，不写死 dist/mac 与 dist/mac-arm64（electron-builder 目录随 runner 架构会变）。
+      - name: Verify code signatures
+        run: |
+          ls -la dist
+          mapfile -t apps < <(find dist -name 'DSH Desktop.app' -type d)
+          printf 'found %s app bundle(s)\n' "${#apps[@]}"
+          if [[ ${#apps[@]} -ne 2 ]]; then
+            echo "expected 2 app bundles (arm64 + x64), found ${#apps[@]}"
+            printf '%s\n' "${apps[@]}"
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "verifying $app"
+            codesign --verify --deep --strict "$app"
+          done
+      # 只上传 dmg：macOS 上壳自动更新已禁用，latest-mac.yml 等更新元数据不进 Release。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: dist/DSH-Desktop-*.dmg
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [windows, mac]
+    steps:
+      # checkout 提供 CHANGELOG.md 与 scripts/；release-notes.mjs 只用 Node 内建模块，无需安装依赖。
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # 说明来自 CHANGELOG.md 对应小节 + 全部安装包 SHA-256；缺任何一样即失败，防止缺说明或缺包发版。
       - name: Generate release notes
         run: node scripts/release-notes.mjs ${{ github.ref_name }} dist/release-notes.md
       - name: Publish GitHub Release
@@ -44,4 +107,6 @@ jobs:
             dist/DSH-Desktop-Setup-*.exe
             dist/DSH-Desktop-Setup-*.exe.blockmap
             dist/latest.yml
+            dist/DSH-Desktop-*-arm64.dmg
+            dist/DSH-Desktop-*-x64.dmg
           fail_on_unmatched_files: true

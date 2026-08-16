@@ -2,7 +2,7 @@
  * 后端进程监督器。与 dsh 的全部耦合面：
  *   1. spawn `<command> <args>`（未显式给 --port 时追加 `--port 0`，端口由 OS 分配）；
  *   2. 就绪信号 = stdout 出现 `dsh web: <URL>` 行（dsh 在 Loader 树结算后才打印）；
- *   3. 结束 = taskkill 整棵进程树。
+ *   3. 结束 = kill 整棵进程树（Windows taskkill /T /F；POSIX 进程组 SIGTERM，3s 未退再 SIGKILL）。
  * 崩溃自动重启（1s/3s/10s 退避，就绪稳定 60s 后清零计数），日志入内存环形缓冲并落盘。
  */
 import { spawn, spawnSync } from 'node:child_process';
@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { getLocale, t } from './i18n.js';
+import { quoteForShell } from './shell-quote.js';
 
 const READY_PREFIX = 'dsh web: ';
 const BACKOFF_MS = [1000, 3000, 10000];
@@ -80,12 +81,18 @@ export class Supervisor extends EventEmitter {
     const args = [...this.config.args];
     if (!args.includes('--port')) args.push('--port', '0');
     this.log(`$ ${this.config.command} ${args.join(' ')}`);
+    const useShell = this.config.shell === true;
+    // shell:true 时 Node 把 command+args 裸拼接后交给 shell，含空格的路径必须先加引号。
+    const command = useShell ? quoteForShell(this.config.command) : this.config.command;
+    const spawnArgs = useShell ? args.map(quoteForShell) : args;
     let child;
     try {
-      child = spawn(this.config.command, args, {
+      child = spawn(command, spawnArgs, {
         cwd: this.config.cwd || undefined,
         env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', ...this.config.env },
-        shell: this.config.shell === true,
+        shell: useShell,
+        // POSIX 让后端自成进程组，killTree 用 -pid 结束整棵树；Windows 走 taskkill，无需分组。
+        detached: process.platform !== 'win32',
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -162,17 +169,29 @@ export class Supervisor extends EventEmitter {
     if (this.child !== null) this.killTree(this.child.pid);
   }
 
-  /** @param {number | undefined} pid 结束整棵后端进程树（Windows 用 taskkill /T /F）。 */
+  /** @param {number | undefined} pid 结束整棵后端进程树：Windows 用 taskkill /T /F；POSIX 先给进程组发 SIGTERM，3 秒仍未退出再 SIGKILL。 */
   killTree(pid) {
     if (pid === undefined) return;
     if (process.platform === 'win32') {
       spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      try {
-        process.kill(pid, 'SIGTERM');
-      } catch {
-        /* 进程已自行退出 */
-      }
+      return;
     }
+    const signalTree = signal => {
+      try {
+        process.kill(-pid, signal);
+      } catch {
+        /* 进程组不存在或无权限（ESRCH/EPERM）时退回只发主进程 */
+        try {
+          process.kill(pid, signal);
+        } catch {
+          /* 进程已自行退出 */
+        }
+      }
+    };
+    signalTree('SIGTERM');
+    setTimeout(() => {
+      // exit 时 child 已置 null（或重启后换了新 pid），不再补 SIGKILL。
+      if (this.child !== null && this.child.pid === pid) signalTree('SIGKILL');
+    }, 3000);
   }
 }

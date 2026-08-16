@@ -21,7 +21,7 @@ import { resolveLaunchFromDir } from './harness.js';
 import { Supervisor } from './supervisor.js';
 import { loadWindowState, trackWindowState } from './window-state.js';
 import { startUpdater } from './updater.js';
-import { launchEnvForNode, probeEnvironment } from './probe.js';
+import { augmentDarwinPath, launchEnvForNode, probeEnvironment } from './probe.js';
 import { deployOfficial } from './deploy.js';
 import { BUNDLED_NODE_VERSION, bundledNodeRoot, ensureBundledNode } from './bundled-node.js';
 import { getLocale, setLocale, strings, t } from './i18n.js';
@@ -279,7 +279,8 @@ function maybeHintCloseToTray() {
     type: 'info',
     title: t('trayHintTitle'),
     message: t('trayHintTitle'),
-    detail: t('trayHintBody'),
+    // darwin 的「托盘」实为菜单栏图标，文案单独一份。
+    detail: t(process.platform === 'darwin' ? 'trayHintBodyMac' : 'trayHintBody'),
   });
 }
 
@@ -434,7 +435,8 @@ function rebuildTray() {
 
 /** 建托盘：菜单项随后端状态与更新状态刷新。 */
 function buildTray() {
-  tray = new Tray(asset('icon-32.png'));
+  // darwin 的托盘位是菜单栏，32px 会过大，用 16px。
+  tray = new Tray(asset(process.platform === 'darwin' ? 'icon-16.png' : 'icon-32.png'));
   applyWindowTitle();
   rebuildTray();
   supervisor.on('status', rebuildTray);
@@ -605,6 +607,10 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showAnyWindow);
+  // mac 点 Dock 图标时重新示窗；supervisor 尚未初始化的极早期点击忽略。
+  app.on('activate', () => {
+    if (supervisor !== null) showAnyWindow();
+  });
   app.on('window-all-closed', () => {
     /* 托盘常驻：窗口全关不退出应用 */
   });
@@ -613,7 +619,15 @@ if (!app.requestSingleInstanceLock()) {
     if (supervisor !== null) supervisor.stop();
   });
   void app.whenReady().then(() => {
-    Menu.setApplicationMenu(null);
+    augmentDarwinPath();
+    // darwin 置空应用菜单会连 Cmd+C/V/Q 一起废掉，保留系统三件套；其他平台不要菜单。
+    if (process.platform === 'darwin') {
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
+      );
+    } else {
+      Menu.setApplicationMenu(null);
+    }
     const config = loadConfig();
     setLocale(config.locale);
     supervisor = new Supervisor(config, path.join(app.getPath('userData'), 'logs'));
