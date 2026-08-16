@@ -29,6 +29,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build NSIS
         run: pnpm run dist
+      # 说明来自 CHANGELOG.md 对应小节 + 安装包 SHA-256；缺一即失败，防止无说明发版。
+      - name: Generate release notes
+        run: node scripts/release-notes.mjs ${{ github.ref_name }} dist/release-notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -36,17 +39,7 @@ jobs:
           prerelease: false
           make_latest: true
           name: DSH Desktop ${{ github.ref_name }}
-          body: |
-            Desktop shell around official `dsh web`. This package updates the shell only; it does not fork or embed DeepSeek Harness.
-
-            壳核分离桌面外壳。本包只更新壳，不内嵌、不 fork DeepSeek Harness。
-
-            First run can install an app-local official Node (not on PATH) plus `@deepseek-ai/dsh`, or use a system Node 22.19+/24. Closing the window hides to the tray — quit from the cyan `>_` icon.
-
-            首次可安装本应用官方 Node（不写入 PATH）和 `@deepseek-ai/dsh`，或使用系统 Node 22.19+/24。关窗进托盘；退出请右键青色 `>_` 图标。
-
-            The installer is unsigned. If SmartScreen appears: More info → Run anyway.
-            安装包未签名，SmartScreen 提示时点「更多信息 → 仍要运行」。
+          body_path: dist/release-notes.md
           files: |
             dist/DSH-Desktop-Setup-*.exe
             dist/DSH-Desktop-Setup-*.exe.blockmap

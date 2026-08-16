@@ -2,108 +2,89 @@
 
 English | [中文](README.zh.md)
 
-A desktop window around the official DeepSeek Harness `dsh web` UI: system tray, close-to-tray, crash restart, first-run install of the official CLI, and **separate** updates for this shell and for official Harness.
+[![Release](https://img.shields.io/github/v/release/shenzheyuan2020/dsh-desktop-shell)](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest)
+[![CI](https://github.com/shenzheyuan2020/dsh-desktop-shell/actions/workflows/ci.yml/badge.svg)](https://github.com/shenzheyuan2020/dsh-desktop-shell/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**The shell is ours. The UI inside the window is the official product.** We do not fork, vendor, inject, or patch official source. When official Harness updates, the window shows that update.
+A Windows desktop window around the official DeepSeek Harness `dsh web` UI: system tray, close-to-tray, crash restart, first-run install of the runtime and the official CLI, and separate updates for the shell and for official Harness.
 
-| | Link |
-|---|---|
-| Installer | [Releases](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest) |
-| Current version | 0.1.7 (Windows x64) |
-| Official Harness | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) |
+**The shell is ours. The UI inside the window is the official product.** No fork, no vendoring, no injection into official source. When official Harness updates, the window shows that update.
 
-The window title and tray tooltip show **shell version** and **Harness version** (when known), for example `DSH Desktop 0.1.7 · Harness 0.1.0-rc.6`.
+![First-run wizard](docs/screenshot-en.png)
 
----
+## Table of contents
 
-## Language
+- [How it couples to official Harness](#how-it-couples-to-official-harness)
+- [Install](#install)
+- [First launch](#first-launch)
+- [Daily use](#daily-use)
+- [Updates: shell vs official Harness](#updates-shell-vs-official-harness)
+- [Language](#language)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Releasing (maintainers)](#releasing-maintainers)
+- [Known limits](#known-limits)
+- [Changelog](#changelog)
+- [License](#license)
 
-On the **first** write of `config.json`, the shell follows the Windows display language (`zh*` → Chinese, otherwise English). You can still switch at any time:
+## How it couples to official Harness
 
-- Startup page, top right: **English** / **中文**
-- Tray → **Language** → English or 中文
+Exactly three contracts, nothing else:
 
-The choice is written as `"locale": "en"` or `"zh"` and is kept on the next launch. A language change applies immediately to the shell. Changing `command` / `args` / `cwd` needs **Restart backend**.
+1. **Start** — spawn the configured `command` + `args` (append `--port 0` unless a port is set).
+2. **Ready** — wait for the stdout line `dsh web: <URL>`, then load that URL with zero injection (no preload, sandboxed, loopback-only navigation; other links open in the system browser).
+3. **Stop** — kill the whole backend process tree on quit or restart.
 
-The official Harness window has its **own** language settings. This shell does not change that UI. The startup page says so on purpose.
+Custom tools or UI for the agent belong in official bundles / profiles / slots, not in this shell.
 
----
+Official project: [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) · npm package: [`@deepseek-ai/dsh`](https://www.npmjs.com/package/@deepseek-ai/dsh)
 
-## Install the shell
+## Install
 
 1. Open the [latest Release](https://github.com/shenzheyuan2020/dsh-desktop-shell/releases/latest).
-2. Download **`DSH-Desktop-Setup-0.1.7.exe`** (about 95 MB). Do not download the Source code zip; that is source, not the app.
-3. Run the installer. It is unsigned. If Windows SmartScreen appears, choose **More info → Run anyway**.
+2. Download **`DSH-Desktop-Setup-<version>.exe`** (about 95 MB). Do not download the Source code zip — that is source, not the app.
+3. The installer is unsigned. If Windows SmartScreen appears, choose **More info → Run anyway**. Each release's notes carry the installer's **SHA-256**; verify with `Get-FileHash` if you want.
 4. Start **DSH Desktop** from the Start menu or the desktop shortcut.
 
-Use this Setup installer. Auto-update of the **shell** only works for the installed app. The `dist/win-unpacked` folder is for developers and will not receive shell updates.
+Use the Setup installer. Shell auto-update only works for the installed app; `dist/win-unpacked` is a developer artifact and never updates.
 
----
-
-## First launch: detect Harness, or install it yourself
+## First launch
 
 On every start the shell looks for official DeepSeek Harness, in this order:
 
-1. The **current** `config.json` launch path (a source checkout in `cwd`, or a `dsh.cmd` you already chose)
-2. The `DSH_CHECKOUT` environment variable, if it points at a clone that contains `apps/cli/src/bin.ts`
-3. An official npm install this shell already placed in `%APPDATA%\DSH Desktop\official-runtime`
-4. A `dsh` command on PATH (for example `npm install -g @deepseek-ai/dsh`)
+1. The current `config.json` launch path (a source checkout in `cwd`, or a `dsh.cmd` you already chose)
+2. The `DSH_CHECKOUT` environment variable, pointing at a clone that contains `apps/cli/src/bin.ts`
+3. An official npm install this shell placed in `%APPDATA%\DSH Desktop\official-runtime`
+4. A `dsh` command on PATH
 
-There is **no** hardcoded maintainer disk path. If you develop from a clone, set `DSH_CHECKOUT` or use **Choose Harness folder**.
-
-**If one of those is found**, the official UI starts immediately.
-
-**If none is found**, the startup page stays open as a short wizard. The shell does not install anything until you confirm.
+If one is found, the official UI opens immediately. Otherwise the startup page acts as a short wizard — nothing installs until you confirm.
 
 ### Option A — install from the shell (no git clone)
 
-Node is optional to install yourself. The shell prefers, in order:
-
-1. A **system** Node.js 22.19+ or 24+ with npm
-2. An **app-local** official Node already downloaded into `%APPDATA%\DSH Desktop\bundled-node` (not on the system PATH)
-3. Nothing — then the primary button can download one
+Node is optional to install yourself. The shell prefers, in order: a **system** Node.js 22.19+/24+ with npm; an **app-local** official Node already in `%APPDATA%\DSH Desktop\bundled-node` (never on the system PATH); or nothing — then the primary button downloads one.
 
 | This PC | Primary button | What happens |
 |---|---|---|
-| Qualified system Node, no Harness | **Install official Harness** | Uses system Node. Does not download another copy. |
-| No qualified Node | **Install runtime and official Harness** | Downloads official Node.js 24.18.1 (Windows x64 zip, SHA-256 checked) into `bundled-node`, then `npm install @deepseek-ai/dsh` into `official-runtime`. |
-| Checkout or folder already chosen | Official UI opens | Neither install step appears. |
+| Qualified system Node, no Harness | **Install official Harness** | Uses system Node; downloads nothing extra. |
+| No qualified Node | **Install runtime and official Harness** | Downloads official Node.js (Windows x64 zip, SHA-256 verified against official checksums) into `bundled-node`, then installs `@deepseek-ai/dsh` into `official-runtime`. |
+| Checkout or folder already chosen | — | The official UI just opens. |
 
-The Node zip is **not** inside the Setup installer. First time without system Node needs network (~30 MB for Node, then the npm package). Default npm registry failure retries with `https://registry.npmmirror.com`. The Node zip tries nodejs.org, then npmmirror. You can set `"npmRegistry"` in `config.json`.
+Network notes: the Node zip tries nodejs.org, then npmmirror; npm installs retry with `https://registry.npmmirror.com` when the default registry fails; `"npmRegistry"` in `config.json` overrides.
 
-**Advanced** still has: **Install app-local Node only**, **Install system Node.js from nodejs.org** (choose 22.19+ or 24, not 20), **Choose Harness folder**, **Edit config.json**.
+**Advanced** keeps the rest: **Install app-local Node only**, **Install system Node.js from nodejs.org** (choose 22.19+ or 24 — not 20), **Choose Harness folder…**, **Edit config.json**, **Check again**, **Restart backend**.
 
-When that finishes, the official UI opens. Enter the API key under **Settings → Models** in that UI. Do not put the key in the shell config.
+When the official UI opens, enter the API key there under **Settings → Models**. The shell never stores the key.
 
-The same actions are on the tray. If the official package is already in `official-runtime`, the item is **Update official Harness** (latest npm). That does **not** update this desktop shell.
+### Option B — you already have Harness
 
-If you already launch from a source checkout, the confirm dialog warns that launch config will switch to the npm package. Use **Choose Harness folder** to switch back.
+**Choose Harness folder…** (Advanced, or the tray) opens a folder picker and accepts:
 
-### Option B — you already installed Harness yourself
+- a git clone containing `apps/cli/src/bin.ts`
+- a folder containing `dsh.cmd` / `dsh`
+- a folder containing `node_modules\.bin\dsh.cmd`
 
-Click **Choose Harness folder…** (startup **Advanced**, or the tray). Pick a directory. The shell accepts:
-
-- a git clone that contains `apps/cli/src/bin.ts`
-- a folder that contains `dsh.cmd` / `dsh`
-- a folder that contains `node_modules\.bin\dsh.cmd`
-
-It writes `config.json` and starts. It does **not** open the JSON file for this step. **Edit config.json** stays under Advanced for hand edits.
-
-After a manual install outside the app, **Check again** rescans and starts if it can see Harness.
-
-### If startup fails
-
-| What you see | What to do |
-|---|---|
-| DeepSeek Harness is not on this PC yet | Confirm **Install official Harness** or **Install runtime and official Harness**, or **Choose Harness folder**. |
-| No usable Node.js 22.19+ or 24 | Use **Install runtime and official Harness**, or Advanced → app-local Node only / system Node from nodejs.org (not 20). |
-| npm exited with a non-zero code | Network / registry. The shell already retried npmmirror. Set `npmRegistry`, or install yourself and choose the folder. |
-| `dsh web: http://127.0.0.1:…` never appears | The official package started but did not become ready. Open **Backend console** and read the log; or point at a source checkout. |
-| `'dsh' is not recognized` / `ENOENT` | Nothing on PATH. Use one-click install, or choose a folder. |
-
-Config path: `%APPDATA%\DSH Desktop\config.json`. After you edit `command` / `args` / `cwd`, click **Restart backend**.
-
----
+It writes `config.json` and starts — no JSON editing needed. After any manual install outside the shell, **Check again** rescans; the page also rechecks whenever it regains focus.
 
 ## Daily use
 
@@ -111,51 +92,37 @@ The cyan `>_` icon is the tray. Right-click:
 
 | Item | Meaning |
 |---|---|
-| **Show window** | Bring the official UI back. Double-click the tray does the same. |
-| **Backend console** | Reopen the startup page (log, versions, Advanced). It is not discarded after the UI loads. |
-| **Open in browser** | Open the same official UI in the system browser. |
-| **Copy address** | Copy the current `http://127.0.0.1:<port>` URL. |
-| **Install runtime and official Harness** | Shown when there is no usable Node. Downloads app-local official Node, then official Harness. |
-| **Install official Harness** / **Update official Harness** | npm install or update `@deepseek-ai/dsh` in this app’s folder. Uses system Node if it qualifies. Asks first. Does not update the shell. |
-| **Install app-local Node only** | Downloads official Node into `bundled-node` only. Not on the system PATH. Hidden once that Node is present. |
-| **Choose Harness folder…** | Folder picker; validates checkout or `dsh`. |
-| **Restart backend** | Restart only `dsh web`. The window follows the new port. |
-| **Open backend logs** | Opens `%APPDATA%\DSH Desktop\logs`. |
-| **Edit config.json** | Opens the JSON file. Restart the backend after `command` / `args` / `cwd` edits. Locale applies immediately. |
-| **Language** | English or 中文. Applies to the shell only. |
-| **Check for shell updates** | Check GitHub Releases for a new **shell**. Does not update official Harness. |
-| **Open shell releases page** | Open this project’s Releases in the browser. |
+| **Show window** | Bring the official UI back (double-click works too). |
+| **Backend console** | Reopen the startup page: log, versions, Advanced actions. |
+| **Open in browser** / **Copy address** | Same official UI in the system browser / copy `http://127.0.0.1:<port>`. |
+| **Install runtime and official Harness** | Shown when no usable Node exists. App-local Node + official Harness. |
+| **Install / Update official Harness** | npm install or update `@deepseek-ai/dsh` in the app folder. Asks first. |
+| **Install app-local Node only** | Official Node into `bundled-node` only; hidden once present. |
+| **Choose Harness folder…** | Folder picker with validation. |
+| **Restart backend** | Restart `dsh web` only; the window follows the new port. |
+| **Open backend logs** / **Edit config.json** | `%APPDATA%\DSH Desktop\logs` / the config file. |
+| **Language** | English or 中文 — shell only. |
+| **Check for shell updates** / **Open shell releases page** | GitHub Releases, shell only. |
 | **Quit (stop backend)** | Exit the shell and stop `dsh web`. |
 
-The first time you close the window (or the startup page), a dialog explains: that hides to the tray; the backend keeps running. That is not Quit. The flag is stored as `closeToTrayHintShown`.
-
-F12 opens DevTools on the startup page or the official UI window.
-
-The startup page header always shows shell version, Harness version and kind, Node version and whether it is **system** or **app-local**, and the path in use.
-
----
+Closing the window hides it to the tray; the backend keeps running (a one-time dialog explains this). F12 opens DevTools. The window title, tray tooltip, and startup page header always show shell version, Harness version and kind, and whether Node is **system** or **app-local**.
 
 ## Updates: shell vs official Harness
 
-These are two different actions.
+Two separate actions:
 
-**Shell** (this desktop app): the Setup install, about 8 seconds after start, checks GitHub Releases. It checks again every 6 hours. You can also use tray **Check for shell updates**. An update replaces this shell only.
+- **Shell** — the Setup install checks GitHub Releases about 8 seconds after start, then every 6 hours; also tray **Check for shell updates**. An update replaces this shell only. Dev mode and `win-unpacked` never auto-update.
+- **Official Harness** — tray **Update official Harness** runs npm against `@deepseek-ai/dsh` in `official-runtime`. It never touches the Setup install, your checkout, or API keys.
 
-**Official Harness**: tray **Update official Harness** (or first-run install). That runs npm against `@deepseek-ai/dsh` in `official-runtime`. It does not replace the Setup installer.
+## Language
 
-- 0.1.0 had no shell updater — install Setup once by hand.
-- 0.1.1 and later can follow later Setup releases.
+The shell follows the Windows display language on first run (`zh*` → Chinese, otherwise English). Switch anytime from the startup page (top right) or tray **Language**; the choice persists as `"locale"` in `config.json` and applies immediately. The official Harness UI keeps its own language setting — this shell does not touch it.
 
-Dev mode (`pnpm start`) and `win-unpacked` do not auto-update the shell. That is expected.
+## Configuration
 
----
+File: `%APPDATA%\DSH Desktop\config.json` (tray **Edit config.json**). After editing `command` / `args` / `cwd`, use **Restart backend**.
 
-## Config
-
-File: `%APPDATA%\DSH Desktop\config.json`  
-Tray: **Edit config.json**. After `command` / `args` / `cwd` edits, **Restart backend**.
-
-Default when no checkout is found (locale follows the OS on first write):
+Default when nothing is found (locale follows the OS on first write):
 
 ```json
 {
@@ -168,7 +135,7 @@ Default when no checkout is found (locale follows the OS on first write):
 }
 ```
 
-If you cloned the official repository, use **Choose Harness folder** or write (change the path):
+Source-checkout launch (or just use **Choose Harness folder**):
 
 ```json
 {
@@ -177,87 +144,81 @@ If you cloned the official repository, use **Choose Harness folder** or write (c
   "cwd": "D:\\path\\to\\deepseek-harness",
   "env": {},
   "shell": false,
-  "locale": "zh"
+  "locale": "en"
 }
 ```
 
-After a successful **Install official Harness**, `command` is set to the `dsh.cmd` inside `official-runtime`.
-
 | Field | Meaning |
 |---|---|
-| `command` / `args` | Process to start. If `args` has no `--port`, the shell adds `--port 0` (OS-assigned, no clash). Needs Restart backend. |
-| `cwd` | Working directory. For a source launch this must be the repo root. |
-| `env` | Extra environment variables, merged on top of the process environment. |
-| `shell` | Must be `true` on Windows when `command` is `dsh` or a `.cmd` shim. |
-| `locale` | `"en"` or `"zh"`. The language switcher writes this. Applies immediately. |
-| `npmRegistry` | Optional. If set, npm install uses this registry first, then the default, then npmmirror. |
-| `closeToTrayHintShown` | Set after the first close-to-tray explanation. |
-| `harnessVersion` | Written after a successful official-package install; the UI also reads `package.json` live. |
+| `command` / `args` | Process to start. Without `--port`, the shell appends `--port 0` (OS-assigned). |
+| `cwd` | Working directory; the repo root for source launches. |
+| `env` | Extra environment variables, merged over the process environment. App-local Node prepends its folder to `env.PATH` here. |
+| `shell` | `true` on Windows when `command` is `dsh` or a `.cmd` shim. |
+| `locale` | `"en"` or `"zh"`; written by the language switcher; applies immediately. |
+| `npmRegistry` | Optional. Tried first for npm installs, then the default registry, then npmmirror. |
+| `closeToTrayHintShown` | Set after the one-time close-to-tray dialog. |
+| `harnessVersion` | Written after an official-package install; the UI also reads `package.json` live. |
 
-You can set user environment variable `DSH_CHECKOUT` to a repo path, delete `config.json`, and restart so defaults are rewritten.
+Paths: logs in `%APPDATA%\DSH Desktop\logs\backend.log` (rotated at 5 MB); official package in `official-runtime`; app-local Node in `bundled-node`. Setting `DSH_CHECKOUT` and deleting `config.json` rewrites defaults on next start.
 
-Logs: `%APPDATA%\DSH Desktop\logs\backend.log` (rotated to `.old` after 5 MB). Log timestamps follow the shell language.
+## Troubleshooting
 
-App-local Node (optional): `%APPDATA%\DSH Desktop\bundled-node`. Not on the system PATH. Launch config `env.PATH` prepends that folder when this Node is in use.
+| Symptom | Fix |
+|---|---|
+| “DeepSeek Harness is not on this PC yet” | Confirm the primary install button, or **Choose Harness folder**. |
+| “No usable Node.js 22.19+ or 24” | **Install runtime and official Harness**, or Advanced → app-local Node / system Node (not 20). |
+| npm exits non-zero | Network/registry issue; npmmirror was already retried. Set `npmRegistry`, or install manually and choose the folder. |
+| `dsh web: http://127.0.0.1:…` never appears | Backend started but not ready. **Backend console** → read the log; or point at a source checkout. |
+| `'dsh' is not recognized` / `ENOENT` | Nothing on PATH. Use the install button or choose a folder. |
+| SmartScreen blocks the installer | Unsigned build: **More info → Run anyway**; verify the SHA-256 from the release notes first if unsure. |
 
----
-
-## How the shell talks to official Harness
-
-Only three contracts:
-
-1. Start: spawn `command` + `args` (add `--port 0` unless you set a port).
-2. Ready: wait for a stdout line `dsh web: <URL>`, then load that URL with no injection.
-3. Stop: kill the whole backend process tree on quit or restart.
-
-Custom tools or UI for the agent belong in official bundles / profiles / slots, not in this shell.
-
----
-
-## Maintainers
+## Development
 
 ```sh
 git clone https://github.com/shenzheyuan2020/dsh-desktop-shell.git
 cd dsh-desktop-shell
 pnpm install
-pnpm start          # dev run; Check for shell updates is unavailable, as designed
-pnpm run dist       # NSIS installer + latest.yml in dist/
+pnpm start          # dev run; shell auto-update is unavailable here by design
+pnpm run dist       # NSIS installer + latest.yml into dist/
+node scripts/check-i18n.mjs                         # en/zh key + placeholder parity
+node_modules/electron/dist/electron.exe scripts/shot.mjs   # regenerate README screenshots
 ```
 
-To point a dev machine at a source checkout without editing JSON every time:
+To pin a dev machine to a source checkout: `setx DSH_CHECKOUT "D:\path\to\deepseek-harness"`, then restart the shell.
 
-```powershell
-setx DSH_CHECKOUT "D:\path\to\deepseek-harness"
-```
+CI (`.github/workflows/ci.yml`) runs on every push and PR: syntax checks for all JS, en/zh string parity, and a check that `CHANGELOG.md` has a section for the current `package.json` version.
 
-Then restart the shell (new processes see the variable).
-
-You can also `npx github:shenzheyuan2020/dsh-desktop-shell` (Node 22+; downloads Electron). End users should use Setup.
-
-To publish: bump `package.json` `version`, commit, then:
-
-```sh
-git tag vX.Y.Z
-git push origin main
-git push origin vX.Y.Z
-```
-
-A `v*` tag starts GitHub Actions, which builds the installer and creates the Release (including `latest.yml` for electron-updater). Do not also run `gh release create` for the same tag.
-
-pnpm 11 blocks dependency build scripts unless allowed. `pnpm-workspace.yaml` already allows `electron` and `electron-winstaller`. If `node_modules/electron/dist/electron.exe` is missing:
+pnpm 11 blocks dependency build scripts unless allowed; `pnpm-workspace.yaml` already allows `electron` and `electron-winstaller`. If `node_modules/electron/dist/electron.exe` is missing:
 
 ```powershell
 $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'; node node_modules/electron/install.js
 ```
 
----
+## Releasing (maintainers)
+
+1. Add a `## [x.y.z] - date` section to `CHANGELOG.md` (CI enforces this).
+2. Bump `version` in `package.json`, commit.
+3. Tag and push:
+
+```sh
+git tag vX.Y.Z
+git push origin main vX.Y.Z
+```
+
+The release workflow builds the installer, generates the release body from the changelog section plus the installer SHA-256 (`scripts/release-notes.mjs` — it fails if either is missing), and publishes via `action-gh-release`. Never run `gh release create` for the same tag.
 
 ## Known limits
 
-- The installer is unsigned; first run may show SmartScreen.
+- Unsigned installer (SmartScreen on first run); Windows x64 only.
 - Shell auto-update is Setup-only.
-- Official Harness language is not controlled by this shell.
-- Official Harness still needs a real official `node.exe`+`npm` (not Electron’s Node). The Setup installer does not contain that zip; the shell can download it on demand into `bundled-node`, or use a qualified system Node.
-- App-local Node is Windows x64 only (the same as this Setup).
-- Windows x64 only.
+- Official Harness needs a real official `node.exe`+`npm` (Electron’s Node cannot run it); the Setup does not bundle that zip — the shell downloads it on demand or uses a qualified system Node.
+- The official UI’s language is not controlled by this shell.
 - Not implemented: start on login, global hotkey, multi-profile switcher.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). GitHub release notes are generated from it per tag.
+
+## License
+
+[MIT](LICENSE) © shenzheyuan2020

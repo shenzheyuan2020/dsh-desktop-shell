@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: |
+          for f in src/*.js scripts/*.mjs splash/preload.cjs; do
+            node --check "$f"
+          done
+      - name: i18n parity (en/zh keys and placeholders)
+        run: node scripts/check-i18n.mjs
+      - name: Changelog has a section for package.json version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md missing section for $VERSION"; exit 1; }
